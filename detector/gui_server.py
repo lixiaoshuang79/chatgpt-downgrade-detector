@@ -158,6 +158,8 @@ class Handler(BaseHTTPRequestHandler):
             self._progress()
         elif path == "/api/rules":
             self._rules()
+        elif path == "/api/plugin.zip":
+            self._plugin_zip()
         else:
             self._send(404, {"error": "not found"})
 
@@ -234,6 +236,35 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"clean": [], "rules": "", "hint": "还没有检测出干净节点"})
             return
         self._send(200, {"clean": clean, "rules": generate_rules_yaml(clean)})
+
+    def _plugin_zip(self):
+        """浏览器插件下载：优先返回仓库内置 zip，缺失则现场打包 extension/ 目录。"""
+        import io
+        import shutil
+        import zipfile
+        root = Path(__file__).parent.parent  # 项目根
+        ext_dir = root / "extension"
+        zips = sorted(ext_dir.glob("*.zip")) if ext_dir.is_dir() else []
+        if zips:
+            data = zips[0].read_bytes()
+            fname = zips[0].name
+        elif ext_dir.is_dir():
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for f in ext_dir.iterdir():
+                    if f.is_file() and f.suffix != ".zip":
+                        zf.write(f, f.name)
+            data = buf.getvalue()
+            fname = "chatgpt-fingerprint-extension.zip"
+        else:
+            self._send(404, {"error": "插件目录不存在"})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
+        self.end_headers()
+        self.wfile.write(data)
 
     def _apply(self):
         data = self._read_json()

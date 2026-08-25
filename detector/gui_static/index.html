@@ -169,6 +169,7 @@
     display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
   }
   .node-head h3 { font-size: 14px; font-weight: 700; }
+  .node-head .sel-count { font-size: 11.5px; color: var(--accent-2); font-weight: 600; margin-left: 6px; }
   .node-head .filter { display: flex; gap: 6px; }
   .chip {
     padding: 4px 11px; border-radius: 999px; font-size: 11.5px; cursor: pointer;
@@ -212,6 +213,19 @@
   .tag.t-LOGIN_WALL { color: var(--red); background: rgba(248,113,113,0.12); }
   .tag.t-ERROR { color: var(--gray); background: rgba(100,116,139,0.14); }
   .tag.t-wait { color: var(--text-dim); background: rgba(255,255,255,0.05); }
+  .node-item .ck {
+    flex: none; width: 18px; height: 18px; border-radius: 6px;
+    border: 1.5px solid rgba(255,255,255,0.22);
+    display: grid; place-items: center; cursor: pointer;
+    transition: all 0.15s; background: transparent;
+    font-size: 11px; color: transparent; user-select: none;
+  }
+  .node-item .ck:hover { border-color: rgba(124,108,255,0.7); }
+  .node-item .ck.on {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-color: transparent; color: #fff;
+    box-shadow: 0 0 10px rgba(124,108,255,0.45);
+  }
   .node-item .reply {
     flex: none; font-size: 10.5px; color: var(--text-dim); max-width: 170px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -239,6 +253,52 @@
   footer {
     text-align: center; font-size: 11.5px; color: var(--text-dim); opacity: 0.65; padding-top: 6px;
   }
+
+  /* ---------- 插件卡片 ---------- */
+  .plugin-card {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .plugin-card .pico {
+    width: 42px; height: 42px; border-radius: 12px; flex: none;
+    display: grid; place-items: center; font-size: 20px;
+    background: rgba(79, 157, 255, 0.14);
+  }
+  .plugin-card .ptxt { flex: 1; min-width: 200px; }
+  .plugin-card .ptxt b { font-size: 13.5px; }
+  .plugin-card .ptxt div { font-size: 12px; color: var(--text-dim); margin-top: 3px; line-height: 1.7; }
+  .plugin-card .pbtns { display: flex; gap: 8px; }
+
+  /* ---------- 模态框 ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(4, 6, 12, 0.66); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; padding: 24px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    max-width: 560px; width: 100%; max-height: 82vh; overflow-y: auto;
+    background: #131a30; border: 1px solid var(--card-border);
+    border-radius: 18px; padding: 24px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+    animation: slideIn 0.22s ease;
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 6px; }
+  .modal .sub { font-size: 12.5px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.7; }
+  .modal .step {
+    display: flex; gap: 12px; margin-bottom: 14px; align-items: flex-start;
+  }
+  .modal .step .n {
+    flex: none; width: 24px; height: 24px; border-radius: 8px;
+    background: rgba(124,108,255,0.16); color: var(--accent);
+    display: grid; place-items: center; font-size: 12px; font-weight: 800;
+  }
+  .modal .step .s { font-size: 13px; line-height: 1.8; }
+  .modal .step code {
+    background: rgba(255,255,255,0.08); padding: 2px 7px; border-radius: 6px;
+    font-family: var(--mono); font-size: 11.5px; color: #c9d2e8;
+  }
+  .modal .close-row { text-align: right; margin-top: 6px; }
+  .modal .warn { font-size: 12px; color: var(--yellow); line-height: 1.8; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -292,8 +352,9 @@
     <!-- 右栏：节点列表 -->
     <section class="card node-panel">
       <div class="node-head">
-        <h3 id="nodeTitle">节点列表</h3>
-        <div class="filter" id="filter">
+        <h3 id="nodeTitle">节点列表 <span class="sel-count" id="selCount"></span></h3>
+        <div class="filter">
+          <span class="chip" id="btnSelectAll">全选</span>
           <span class="chip active" data-f="">全部</span>
           <span class="chip" data-f="LUNA">干净</span>
           <span class="chip" data-f="MINI">半干净</span>
@@ -320,7 +381,33 @@
     <div class="hint" id="rulesHint"></div>
   </section>
 
+  <!-- 插件卡片 -->
+  <section class="card plugin-card">
+    <div class="pico">🌐</div>
+    <div class="ptxt">
+      <b>浏览器插件（可选安装）</b>
+      <div>ChatGPT 指纹核验 + 自动改时区：解决「IP 干净但时区指纹不匹配」的降智 —— 进站自动核验、不匹配自动改时区。</div>
+    </div>
+    <div class="pbtns">
+      <a class="btn ghost small" id="btnDlPlugin" href="/api/plugin.zip" download>⬇ 下载插件</a>
+      <button class="btn ghost small" id="btnPluginHow">📖 安装步骤</button>
+    </div>
+  </section>
+
   <footer>headless 零弹窗检测 · 自动恢复环境 · MIT License</footer>
+</div>
+
+<!-- 插件安装步骤模态框 -->
+<div class="overlay" id="pluginModal">
+  <div class="modal">
+    <h3>🌐 安装浏览器插件（3 步）</h3>
+    <div class="sub">ChatGPT 指纹核验 + 自动改时区 v3.1.0 —— 兼容 Chrome / Edge / Chromium</div>
+    <div class="step"><div class="n">1</div><div class="s">点右上角「⬇ 下载插件」，解压 zip 得到一个文件夹（里面是 <code>manifest.json</code> 等）</div></div>
+    <div class="step"><div class="n">2</div><div class="s">浏览器地址栏打开 <code>chrome://extensions</code>，开启右上角「开发者模式」</div></div>
+    <div class="step"><div class="n">3</div><div class="s">点「加载已解压的扩展程序」→ 选择第 1 步解压的文件夹 → 完成</div></div>
+    <div class="warn">⚠️ 未上架商店，加载时提示「请停用以开发者模式运行的扩展程序」是正常现象，保持开启即可。进站后右上角出现核验条即生效；顶部黄色调试条是改时区的正常副作用（保持附加时区才生效），不要点取消。</div>
+    <div class="close-row"><button class="btn ghost small" onclick="closeModal()">知道了</button></div>
+  </div>
 </div>
 
 <script>
@@ -330,6 +417,31 @@ let RESULTS = {};        // node -> {verdict, reply}
 let BUSY = false;
 let POLL = null;
 let FILTER = "";
+let SELECTED = new Set(); // 勾选的节点（初始=全部）
+
+/* ---------- 选择 ---------- */
+function initSelected() {
+  SELECTED = new Set(NODES);
+  updateSelCount();
+}
+function updateSelCount() {
+  const el = $('selCount');
+  if (!el) return;
+  el.textContent = NODES.length ? `已选 ${SELECTED.size}/${NODES.length}` : '';
+  $('btnScan').textContent = NODES.length ? `▶ 开始检测（${SELECTED.size} 个节点）` : '▶ 开始检测';
+  $('btnSelectAll').textContent = (SELECTED.size === NODES.length && NODES.length > 0) ? '取消全选' : '全选';
+}
+function toggleNode(name) {
+  if (SELECTED.has(name)) SELECTED.delete(name); else SELECTED.add(name);
+  updateSelCount();
+  renderList();
+}
+function toggleSelectAll() {
+  if (SELECTED.size === NODES.length) SELECTED.clear();
+  else SELECTED = new Set(NODES);
+  updateSelCount();
+  renderList();
+}
 
 /* ---------- 渲染 ---------- */
 const TAG = {
@@ -360,7 +472,10 @@ function renderList() {
     const dot = isCur ? 'running' : (r ? 'v-' + r.verdict : '');
     const tag = isCur ? '<span class="tag t-wait">检测中…</span>' : (r ? TAG[r.verdict] : TAG.wait);
     const reply = r ? `<span class="reply">${r.reply.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>` : '';
+    const ck = BUSY ? '' :
+      `<span class="ck ${SELECTED.has(n) ? 'on' : ''}" onclick="event.stopPropagation();toggleNode(${JSON.stringify(n)})">${SELECTED.has(n) ? '✓' : ''}</span>`;
     return `<div class="node-item ${dot}">
+      ${ck}
       <span class="dot"></span>
       <span class="name">${flagOf(n)}${n}</span>
       ${tag}${reply}
@@ -412,6 +527,7 @@ async function refreshStatus() {
     $('vCount').textContent = s.node_count;
     if (!NODES.length) {
       NODES = s.nodes;
+      initSelected();
       renderList();
     }
     if (s.counts && !BUSY) {
@@ -461,7 +577,8 @@ function stopPoll() {
 
 /* ---------- 操作 ---------- */
 $('btnScan').onclick = async () => {
-  const r = await api('/api/scan', {});
+  if (!SELECTED.size) { alert('请先勾选要检测的节点'); return; }
+  const r = await api('/api/scan', { nodes: [...SELECTED] });
   if (r.error) { alert(r.error); return; }
   BUSY = true;
   RESULTS = {}; updateStats();
@@ -521,12 +638,19 @@ $('btnVerge').onclick = async () => {
 /* 筛选 */
 $('filter').addEventListener('click', e => {
   const chip = e.target.closest('.chip');
-  if (!chip) return;
+  if (!chip || chip.id === 'btnSelectAll') return;
   document.querySelectorAll('#filter .chip').forEach(c => c.classList.remove('active'));
   chip.classList.add('active');
   FILTER = chip.dataset.f;
   renderList();
 });
+$('btnSelectAll').onclick = toggleSelectAll;
+
+/* 插件模态框 */
+$('btnPluginHow').onclick = () => $('pluginModal').classList.add('show');
+function closeModal() { $('pluginModal').classList.remove('show'); }
+$('pluginModal').addEventListener('click', e => { if (e.target === $('pluginModal')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 /* ---------- 启动 ---------- */
 (async function init() {
