@@ -650,10 +650,10 @@ $('btnVerge').onclick = async () => {
 };
 
 /* 筛选 */
-$('filter').addEventListener('click', e => {
+document.querySelector('.filter').addEventListener('click', e => {
   const chip = e.target.closest('.chip');
   if (!chip || chip.id === 'btnSelectAll') return;
-  document.querySelectorAll('#filter .chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.filter .chip').forEach(c => c.classList.remove('active'));
   chip.classList.add('active');
   FILTER = chip.dataset.f;
   renderList();
