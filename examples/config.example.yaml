@@ -1,0 +1,39 @@
+# ChatGPT 降智检测器配置示例（全部可省略，默认值见下）
+# 用法: python3 main.py --config config.yaml
+
+# Clash/mihomo 控制端（留空自动探测：
+#   unix socket /tmp/verge/verge-mihomo.sock（Clash Verge Rev）
+#   或 TCP 127.0.0.1:9090 / 127.0.0.1:7890）
+clash-api:
+  socket: ""        # 如 /tmp/verge/verge-mihomo.sock
+  host: ""          # 如 127.0.0.1
+  port: 0           # 如 9090（external-controller 端口）
+
+# 本机代理端口（Clash 混合端口，headless Chrome 走这个代理）
+proxy-port: 7897
+
+# Chrome 可执行文件路径（留空自动查找 macOS/Linux/Windows 常见路径）
+chrome: ""
+
+# 只用这些节点（留空 = 测全部真实节点）
+nodes: []
+# 例: nodes: ["韩国KR-HY2", "台湾-优化", "法国FR-A"]
+
+# 跳过指定协议类型（可选: vmess vless trojan ss ssr hysteria2 anytls wireguard）
+skip-types: []
+
+# 切节点后的等待秒数（节点切换生效时间，一般 2-3s 够）
+switch-sleep: 3
+
+# 测试页面/回复等待上限（秒）
+timeout-page: 70
+timeout-reply: 70
+
+# 测完是否自动恢复 Clash 环境（原 mode / GLOBAL 选择）
+restore: true
+
+# 结果输出目录
+out-dir: "./results"
+
+# 检测完成后是否自动写入 Clash Verge Rev 扩展（等价于命令行 --verge）
+verge: false

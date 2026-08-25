@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "ChatGPT 指纹核验 + 自动改时区",
+  "version": "3.1.0",
+  "description": "进入 ChatGPT 自动核验浏览器时区与出口 IP 是否匹配；不匹配时在页面脚本执行前自动把浏览器时区改为与 IP 一致（chrome.debugger / Emulation.setTimezoneOverride），全程无需手动操作",
+  "permissions": [
+    "debugger",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "http://ip-api.com/*",
+    "https://api.ip.sb/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "ChatGPT 指纹核验 + 自动改时区"
+  }
+}
