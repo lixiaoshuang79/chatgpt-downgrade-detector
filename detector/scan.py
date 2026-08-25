@@ -19,26 +19,28 @@ from mihomo_pool import MihomoPool
 
 def _worker(api, proxy_port, chrome_path, sleep_sec, timeout_reply, node_list,
             results, seq_holder, lock, on_result, worker_id, stop_flag=None):
-    with HeadlessChrome(proxy_port=proxy_port, chrome_path=chrome_path) as chrome:
-        for node in node_list:
-            if stop_flag and stop_flag():
-                break
-            try:
-                ok = api.switch_global(node)
-                if not ok:
-                    r = {"node": node, "verdict": "ERROR", "reply": "switch failed"}
-                else:
-                    if sleep_sec > 0:
-                        time.sleep(sleep_sec)
+    for node in node_list:
+        if stop_flag and stop_flag():
+            break
+        try:
+            ok = api.switch_global(node)
+            if not ok:
+                r = {"node": node, "verdict": "ERROR", "reply": "switch failed"}
+            else:
+                if sleep_sec > 0:
+                    time.sleep(sleep_sec)
+                # 每个节点新建 Chrome：并发下 headless 实例可能进入渲染残缺态
+                # （React 只挂载部分组件 → 发送被忽略），全新实例可规避
+                with HeadlessChrome(proxy_port=proxy_port, chrome_path=chrome_path) as chrome:
                     r = test_node(chrome, node, timeout_reply=timeout_reply)
-            except Exception as e:
-                r = {"node": node, "verdict": "ERROR", "reply": str(e)[:80]}
-            with lock:
-                results.append(r)
-                seq_holder[0] += 1
-                seq = seq_holder[0]
-            if on_result:
-                on_result(node, r, worker_id, seq)
+        except Exception as e:
+            r = {"node": node, "verdict": "ERROR", "reply": str(e)[:80]}
+        with lock:
+            results.append(r)
+            seq_holder[0] += 1
+            seq = seq_holder[0]
+        if on_result:
+            on_result(node, r, worker_id, seq)
 
 
 def scan_nodes(api, proxy_port, nodes, parallel=1, chrome_path=None,

@@ -78,6 +78,11 @@ class ManagedMihomo:
         cfg["allow-lan"] = False
         cfg.pop("external-ui", None)
         cfg.pop("external-controller-tls", None)
+        # 关键：移除 dns.listen——主实例占用 127.0.0.1:1053，多个临时实例
+        # 继承同一端口会 bind 冲突，导致实例控制端假死（API 无响应、0% CPU）
+        dns = cfg.get("dns")
+        if isinstance(dns, dict):
+            dns.pop("listen", None)
         self.cfg_path = os.path.join(self.tmpdir, "config.yaml")
         with open(self.cfg_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)

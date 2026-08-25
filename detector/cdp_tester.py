@@ -180,49 +180,83 @@ def _dismiss_cookie_banner(cdp) -> str:
 
 
 def _type_and_send(cdp) -> str:
-    """设值 → 等发送按钮可用 → 点击 → 确认消息已进入对话。返回状态字符串。"""
-    try:
-        cdp.ev(
-            "(() => { const ta = document.querySelector('textarea');"
-            " if (!ta) return 'NOTA';"
-            " const setter = Object.getOwnPropertyDescriptor("
-            "   window.HTMLTextAreaElement.prototype, 'value').set;"
-            f" setter.call(ta, {json.dumps(QUESTION)});"
-            " ta.dispatchEvent(new Event('input', {bubbles:true}));"
-            " ta.dispatchEvent(new Event('change', {bubbles:true}));"
-            " ta.focus(); return 'SET'; })()")
-    except Exception as e:
-        return f"SET_ERR:{str(e)[:60]}"
+    """设值 → 等 composer 就绪 → 发送 → 确认消息已进入对话。返回状态字符串。
 
-    # 等发送按钮可用（React 同步需要时间，页面卡时更久）
-    st = "TIMEOUT"
-    for _ in range(15):
+    页面渲染竞态是主要坑：textarea 出现 ≠ composer 渲染完成（发送按钮/表单
+    可能稍后才挂载）。发送用 form.requestSubmit()（不依赖按钮 disabled 状态）。
+    """
+    def _set_value() -> bool:
+        # CDP 真实键盘输入：完整 beforeinput→input 事件链，React 受控组件必同步
+        try:
+            cdp.ev("(() => { const ta = document.querySelector('textarea');"
+                   " if (!ta) return 'NOTA'; ta.focus(); return 'OK'; })()")
+            cdp.send("Input.insertText", {"text": QUESTION})
+            return True
+        except Exception:
+            pass
+        try:
+            cdp.ev(
+                "(() => { const ta = document.querySelector('textarea');"
+                " if (!ta) return 'NOTA';"
+                " const setter = Object.getOwnPropertyDescriptor("
+                "   window.HTMLTextAreaElement.prototype, 'value').set;"
+                f" setter.call(ta, {json.dumps(QUESTION)});"
+                " ta.dispatchEvent(new Event('input', {bubbles:true}));"
+                " ta.dispatchEvent(new Event('change', {bubbles:true}));"
+                " ta.focus(); return 'SET'; })()")
+            return True
+        except Exception:
+            return False
+
+    # 1) 等 composer 就绪：发送按钮出现（页面竞态下可能延迟挂载，最多 60s）
+    st = "NOBTN"
+    for _ in range(60):
         time.sleep(1)
         try:
             st = cdp.ev(
-                "(() => { const b = [...document.querySelectorAll('button')]"
-                ".find(b => (b.getAttribute('aria-label') || '').includes('发送')"
-                " || (b.getAttribute('aria-label') || '').includes('Send'));"
-                " return b ? (b.disabled ? 'DISABLED' : 'READY') : 'NOBTN'; })()")
-            if st == "READY":
+                "(() => { const b = document.querySelector("
+                "   'button.wm-composer-submitButton') ||"
+                " [...document.querySelectorAll('button')].find(b =>"
+                "   (b.getAttribute('aria-label') || '').includes('发送') ||"
+                "   (b.getAttribute('aria-label') || '').includes('Send'));"
+                " return b ? 'BTN' : 'NOBTN'; })()")
+            if st == "BTN":
                 break
         except Exception:
             pass
-    if st != "READY":
+    if st != "BTN":
         return f"BTN:{st}"
 
-    # 点击发送
-    try:
-        cdp.ev(
-            "(() => { const b = [...document.querySelectorAll('button')]"
-            ".find(b => (b.getAttribute('aria-label') || '').includes('发送')"
-            " || (b.getAttribute('aria-label') || '').includes('Send'));"
-            " if (!b) return 'NOBTN'; b.click(); return 'SENT'; })()")
-    except Exception as e:
-        return f"CLICK_ERR:{str(e)[:60]}"
+    # 2) 设值（值丢失则重设）
+    if not _set_value():
+        return "SET_FAIL"
+    for _ in range(30):
+        time.sleep(1)
+        try:
+            v = cdp.ev("(document.querySelector('textarea')||{}).value||''")
+            if v:
+                break
+            _set_value()  # 页面重置清空了输入框 → 重新设值
+        except Exception:
+            pass
 
-    # 确认已发送：消息进入对话（出现「你说/You said」）或输入框已清空
-    for _ in range(10):
+    # 3) 发送：优先 form.requestSubmit()（不依赖按钮 disabled）；
+    #    兜底 click 发送按钮
+    sent = cdp.ev(
+        "(() => { const ta = document.querySelector('textarea');"
+        " const f = ta && ta.closest('form');"
+        " if (f) { f.requestSubmit(); return 'SUBMIT'; }"
+        " const b = document.querySelector('button.wm-composer-submitButton') ||"
+        "   [...document.querySelectorAll('button')].find(b =>"
+        "   (b.getAttribute('aria-label') || '').includes('发送') ||"
+        "   (b.getAttribute('aria-label') || '').includes('Send'));"
+        " if (b) { b.click(); return 'CLICK'; }"
+        " return 'NOSEND'; })()")
+    if sent == "NOSEND":
+        return "NOSEND"
+
+    # 4) 确认已发送：消息进入对话（出现「你说/You said」）或输入框已清空
+    for _ in range(12):
         time.sleep(1)
         try:
             ok = cdp.ev(
@@ -231,10 +265,10 @@ def _type_and_send(cdp) -> str:
                 " return (t.includes('你说') || t.includes('You said')"
                 " || !ta || !ta.value) ? 'OK' : 'PENDING'; })()")
             if ok == "OK":
-                return "SENT_OK"
+                return f"SENT_OK_{sent}"
         except Exception:
             pass
-    return "SENT_UNCONFIRMED"
+    return f"SENT_UNCONFIRMED_{sent}"
 
 
 def _wait_reply(cdp, timeout_reply: float) -> str | None:
@@ -286,6 +320,9 @@ def test_node(chrome, node_name: str, timeout_page=90, timeout_reply=120) -> dic
         cdp.send("Page.enable")
         cdp.send("Runtime.enable")
         cdp.send("Network.enable")
+        # 关键：绕过 Service Worker——二次导航（清会话）会命中 SW 缓存的旧版
+        # 页面 JS，导致 React 不响应输入（发送按钮永远 disabled）
+        cdp.send("Network.setBypassServiceWorker", {"bypass": True})
 
         # 2) 清会话（关键防污染）：先加载 chatgpt origin → 清 localStorage/cookie → 重导航
         try:
@@ -326,14 +363,14 @@ def test_node(chrome, node_name: str, timeout_page=90, timeout_reply=120) -> dic
         _dismiss_cookie_banner(cdp)
         time.sleep(1)
 
-        # 4) 发送问题：设值 → 等按钮可用 → 点击 → 确认发送成功
+        # 4) 发送问题：等 composer 就绪 → 设值 → 发送 → 确认发送成功
         send_res = _type_and_send(cdp)
-        if send_res != "SENT_OK":
+        if not send_res.startswith("SENT_OK"):
             # 发送失败：先怀疑 Cookie 弹窗残留，重试一次
             _dismiss_cookie_banner(cdp)
             time.sleep(1)
             send_res = _type_and_send(cdp)
-        if send_res != "SENT_OK":
+        if not send_res.startswith("SENT_OK"):
             return {"node": node_name, "verdict": Verdict.ERROR,
                     "reply": f"发送失败 {send_res}"}
 
