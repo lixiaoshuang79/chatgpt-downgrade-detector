@@ -19,7 +19,7 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 ## 特性
 
 - 🔍 **全节点检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
-- 🖥️ **原生桌面 GUI**：PySide6 (Qt) 深色主题；节点勾选、实时进度、统计、规则应用在一个窗口内完成
+- 🖥️ **Web GUI**：本地网页界面（127.0.0.1 自动打开），节点勾选、实时进度、统计、规则应用
 - 📐 **顶级规则生成**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
 - 🔌 **Clash Verge Rev 集成**（`--verge` / GUI 按钮）：把组/规则写入当前订阅链的扩展文件，重新激活订阅后生效
 - 🌐 **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.0），解决「IP 干净但时区指纹不匹配」的降智
@@ -30,8 +30,9 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 ### 桌面 GUI
 
 ```bash
-pip install -r requirements.txt        # 含 PySide6
-python3 detector/gui.py
+pip install -r requirements.txt
+python3 detector/gui.py                # 自动打开 http://127.0.0.1:8899
+python3 detector/gui.py --no-open      # 不自动打开浏览器
 ```
 
 界面功能：
@@ -42,7 +43,7 @@ python3 detector/gui.py
 - **规则应用**：检测完成后生成顶级规则 → 复制到剪贴板 / 写入 Clash Verge 扩展
 - **浏览器插件**：界面显示插件 zip 与目录入口（安装方法见 [docs/extension-install.md](docs/extension-install.md)）
 
-macOS 桌面入口：双击 `start-gui.command`，或运行 `python3 detector/gui.py`。
+macOS 桌面入口：双击 `start-gui.command`（自动打开浏览器），或运行 `python3 detector/gui.py`。
 
 ### 命令行
 
@@ -142,7 +143,9 @@ python3 detector/main.py --verge
 chatgpt-downgrade-detector/
 ├── detector/
 │   ├── main.py            # CLI（检测 + 规则生成 + --verge 写入）
-│   ├── gui.py             # 原生桌面 GUI（PySide6 / Qt）
+│   ├── gui.py             # Web GUI 入口（本地服务 + 自动打开浏览器）
+│   ├── gui_server.py      # GUI 后端（HTTP API + 后台检测线程）
+│   ├── gui_static/        # 前端界面（单文件）
 │   ├── clash_api.py       # Clash/mihomo REST 封装（unix socket + TCP 自适应）
 │   ├── cdp_tester.py      # headless Chrome CDP 三判定
 │   ├── rules.py           # 规则生成器（片段 / Clash Verge 扩展）
