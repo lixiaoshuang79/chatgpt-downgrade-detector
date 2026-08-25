@@ -22,6 +22,7 @@ from pathlib import Path
 from clash_api import ClashAPI
 from cdp_tester import HeadlessChrome, test_node, Verdict
 from rules import generate_rules_yaml, write_verge_extensions
+from scan import scan_nodes
 
 STATIC_DIR = Path(__file__).parent / "gui_static"
 
@@ -79,43 +80,52 @@ def _snapshot_node(node):
     return None
 
 
-def run_scan(nodes=None, sleep_sec=3.0, proxy_port=7897, chrome=None):
-    """后台检测线程：global 模式 → 逐节点 → 恢复环境。"""
-    api = get_clash()
-    if api is None:
-        STATE.error = "未找到可用的 Clash/mihomo 控制端"
-        STATE.finished_at = time.time()
-        return
-
-    mode_before = api.get_mode()
-    global_before = api.get_global_now()
+def run_scan(nodes=None, sleep_sec=3.0, proxy_port=7897, chrome=None, parallel=1):
+    """后台检测线程。parallel=1 串行（主实例）；parallel>=2 并行（临时实例池，不碰主实例）。"""
+    parallel = max(1, int(parallel))
     STATE.running = True
     STATE.error = None
     try:
-        api.set_mode("global")
-        with HeadlessChrome(proxy_port=proxy_port, chrome_path=chrome) as chrome:
-            for i, node in enumerate(nodes):
-                if STATE.stop_requested:
-                    break
+        if parallel > 1:
+            def on_result(node, r, worker_id, seq):
                 STATE.current = node
-                STATE.done = i
-                ok = api.switch_global(node)
-                if not ok:
-                    STATE.results.append({"node": node, "verdict": Verdict.ERROR, "reply": "节点切换失败"})
-                    continue
-                time.sleep(sleep_sec)
-                r = test_node(chrome, node)
+                STATE.done = seq
                 STATE.results.append(r)
-            STATE.done = len(nodes)
+            scan_nodes(None, proxy_port, nodes, parallel=parallel,
+                       chrome_path=chrome, sleep_sec=sleep_sec,
+                       on_result=on_result, stop_flag=lambda: STATE.stop_requested)
+        else:
+            api = get_clash()
+            if api is None:
+                STATE.error = "未找到可用的 Clash/mihomo 控制端"
+                return
+            mode_before = api.get_mode()
+            global_before = api.get_global_now()
+            api.set_mode("global")
+            with HeadlessChrome(proxy_port=proxy_port, chrome_path=chrome) as chrome:
+                for i, node in enumerate(nodes):
+                    if STATE.stop_requested:
+                        break
+                    STATE.current = node
+                    STATE.done = i
+                    ok = api.switch_global(node)
+                    if not ok:
+                        STATE.results.append({"node": node, "verdict": Verdict.ERROR, "reply": "节点切换失败"})
+                        continue
+                    time.sleep(sleep_sec)
+                    r = test_node(chrome, node)
+                    STATE.results.append(r)
+                STATE.done = len(nodes)
     except Exception as e:
         STATE.error = f"{e}\n{traceback.format_exc(limit=3)}"
     finally:
-        try:
-            api.set_mode(mode_before)
-            if global_before and global_before != "DIRECT":
-                api.switch_global(global_before)
-        except Exception:
-            pass
+        if parallel == 1:
+            try:
+                api.set_mode(mode_before)
+                if global_before and global_before != "DIRECT":
+                    api.switch_global(global_before)
+            except Exception:
+                pass
         STATE.running = False
         STATE.current = None
         STATE.finished_at = time.time()
@@ -205,22 +215,35 @@ class Handler(BaseHTTPRequestHandler):
             self._send(409, {"error": "检测正在进行中"})
             return
         data = self._read_json()
+        parallel = max(1, int(data.get("parallel", 1) or 1))
         nodes = data.get("nodes")
         if not nodes:
-            api = get_clash()
-            if api is None:
-                self._send(400, {"error": "未找到 Clash 控制端"})
-                return
-            nodes = api.list_real_nodes()
+            if parallel > 1:
+                # 并行模式：节点列表从临时实例取（不依赖主实例控制端）
+                from mihomo_pool import MihomoPool
+                try:
+                    with MihomoPool(1) as pool:
+                        api = ClashAPI(host="127.0.0.1", port=pool[0].ctl_port)
+                        nodes = api.list_real_nodes()
+                except Exception as e:
+                    self._send(400, {"error": f"并行实例启动失败: {e}"})
+                    return
+            else:
+                api = get_clash()
+                if api is None:
+                    self._send(400, {"error": "未找到 Clash 控制端"})
+                    return
+                nodes = api.list_real_nodes()
         STATE.reset()
         STATE.total = len(nodes)
         t = threading.Thread(target=run_scan, kwargs={
             "nodes": nodes,
             "sleep_sec": data.get("sleep", 3.0),
             "proxy_port": data.get("proxy_port", 7897),
+            "parallel": parallel,
         }, daemon=True)
         t.start()
-        self._send(200, {"ok": True, "total": len(nodes)})
+        self._send(200, {"ok": True, "total": len(nodes), "parallel": parallel})
 
     def _progress(self):
         snap = STATE.snapshot()

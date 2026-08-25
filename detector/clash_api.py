@@ -34,10 +34,11 @@ INFO_NAME_MARKS = ("剩余", "距离", "套餐", "到期", "客户端", "免流"
 
 
 class ClashAPI:
-    def __init__(self, socket_path=None, host=None, port=None):
+    def __init__(self, socket_path=None, host=None, port=None, secret=None):
         self.socket_path = socket_path
         self.host = host
         self.port = port
+        self.secret = secret
         self._endpoint = self._probe() if not (host and port) and not socket_path else (socket_path or (host, port))
 
     def _probe(self):
@@ -67,10 +68,14 @@ class ClashAPI:
         sock = sock if sock is not None else (ep if isinstance(ep, str) else None)
         if isinstance(ep, tuple) and host is None and port is None:
             host, port = ep
-        url = f"http://localhost{path}"
         cmd = ["curl", "-s", "-m", "10"]
         if sock:
+            url = f"http://localhost{path}"
             cmd += ["--unix-socket", sock]
+        else:
+            url = f"http://{host}:{port}{path}"
+        if self.secret:
+            cmd += ["-H", f"Authorization: Bearer {self.secret}"]
         cmd += ["-X", method, "-w", "\n%{http_code}", url]
         if data is not None:
             cmd += ["-d", json.dumps(data, ensure_ascii=False)]

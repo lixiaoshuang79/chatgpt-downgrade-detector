@@ -19,11 +19,12 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 ## 特性
 
 - **全节点检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
+- **并发检测**（`--parallel` / GUI 并发选项）：临时 mihomo 实例池多出口并行，多倍提速，不占用日常代理端口
 - **Web GUI**：本地网页界面（127.0.0.1 自动打开），节点勾选、实时进度、统计、规则应用
 - **顶级规则生成**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
 - **Clash Verge Rev 集成**（`--verge` / GUI 按钮）：把组/规则写入当前订阅链的扩展文件，重新激活订阅后生效
 - **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.1），解决「IP 干净但时区指纹不匹配」的降智
-- **环境自动恢复**：检测完自动恢复原模式与节点选择
+- **环境自动恢复**：串行模式检测完自动恢复原模式与节点选择
 
 ## 快速开始
 
@@ -40,6 +41,7 @@ python3 detector/gui.py --no-open      # 不自动打开浏览器
 - **统计**：干净（LUNA）/ 半干净（MINI）/ 降智（LOGIN_WALL）/ 异常（ERROR）实时计数
 - **节点列表**：按状态着色，支持筛选（全部/干净/半干净/降智/异常）
 - **检测控制**：开始 / 停止（停止后自动恢复 Clash 环境）
+- **并发选项**：「并发」选择器（1 串行 / 2-4 并行），并行起临时 mihomo 实例多出口检测，日常代理不受影响
 - **规则应用**：检测完成后生成顶级规则 → 复制到剪贴板 / 写入 Clash Verge 扩展
 - **浏览器插件**：界面显示插件 zip 与目录入口（安装方法见 [docs/extension-install.md](docs/extension-install.md)）
 
@@ -161,6 +163,9 @@ chatgpt-downgrade-detector/
 # 只测指定节点（快速验证）
 python3 detector/main.py --nodes "美国-洛杉矶,法国-巴黎"
 
+# 并发检测：2-4 个临时实例并行（推荐，多倍提速，不占用日常代理端口）
+python3 detector/main.py --parallel 4
+
 # 指定配置
 python3 detector/main.py --config config.yaml
 
@@ -174,12 +179,20 @@ python3 detector/main.py --no-restore
 python3 detector/main.py --chrome "/Applications/Google Chrome.app/..." --proxy-port 7897
 ```
 
+### 并发检测原理
+
+Clash/mihomo 同一时刻只有一个出口（GLOBAL 只能选一个节点），逐节点切换是单实例检测慢的根因。并发模式从 Clash Verge 的合并配置复制出 N 份临时配置，各自起一个独立 mihomo 实例（不同 mixed-port 7898+ / 控制端 9091+，仅监听 127.0.0.1），节点 round-robin 分给各实例并行检测：
+
+- 并行实例用完即杀，**不触碰正在运行的 Clash Verge**（不切模式、不切节点、不占 7897 端口）
+- 需要 Clash Verge Rev 环境（读取 `clash-verge.yaml` 合并配置；其他客户端可在 `--parallel 1` 串行下使用）
+- 实测 2 实例约 2 倍速、4 实例约 4 倍速（每实例节点数 = 总数 ÷ 实例数，以最慢实例收尾）
+
 ## 常见问题
 
-- **报「未找到可用的 Clash/mihomo 控制端」**：确认 Clash 已开 external-controller；Clash Verge Rev 用 unix socket 自动探测；其他客户端在 config.yaml 里配 `clash-api.host/port`
+- **报「未找到可用的 Clash/mihomo 控制端」**：确认 Clash 已开 external-controller；Clash Verge Rev 用 unix socket 自动探测；其他客户端在 config.yaml 里配 `clash-api.host/port`。并行模式（`--parallel 2+`）不依赖主实例控制端
 - **检测到干净节点为 0**：你的机场可能全线降智（常见）。换机场/换 IP 池后重测；也检查浏览器时区指纹（用配套插件）
-- **测试很慢**：每节点约 40–90 秒（页面加载 + 回复等待），43 节点约 1 小时。可用 `--nodes` 只测重点节点
-- **测试期间网络变慢**：检测时 Clash 处于 global 模式（所有流量走被测节点）——可中途 Ctrl+C（工具会恢复环境）
+- **测试很慢**：每节点约 40–90 秒（页面加载 + 回复等待）。用 `--parallel` 并发或 `--nodes` 只测重点节点
+- **串行模式测试期间网络变慢**：检测时 Clash 处于 global 模式（所有流量走被测节点）——用并行模式（临时实例）不影响日常网络
 - **「重新激活订阅」后规则没生效**：确认写入的是当前激活订阅链的扩展（`--verge` 会自动解析 profiles.yaml 当前链）
 
 ## 免责声明

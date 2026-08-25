@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from clash_api import ClashAPI            # noqa: E402
 from cdp_tester import HeadlessChrome, test_node, Verdict  # noqa: E402
 from rules import generate_rules_yaml, write_verge_extensions  # noqa: E402
+from scan import scan_nodes              # noqa: E402
 
 COLOR = {
     "LUNA": "\033[32m",        # 绿
@@ -48,6 +49,7 @@ def main():
     ap.add_argument("--verge", action="store_true", help="检测后把干净节点写入 Clash Verge Rev 扩展")
     ap.add_argument("--out", default="./results", help="结果输出目录")
     ap.add_argument("--sleep", type=float, default=3.0, help="切节点后等待秒数")
+    ap.add_argument("--parallel", type=int, default=1, help="并行实例数（1=串行；2-4 起临时 mihomo 实例并行检测）")
     ap.add_argument("--no-restore", action="store_true", help="测完不恢复 Clash 环境")
     ap.add_argument("--skip-errors", action="store_true", help="ERROR 节点不进结果表（--out json 时仍保留）")
     args = ap.parse_args()
@@ -57,60 +59,74 @@ def main():
     proxy_port = args.proxy_port
     sleep_sec = args.sleep
 
-    # ---------- 连接 Clash ----------
+    # ---------- 连接 Clash / 获取节点列表 ----------
+    parallel = max(1, args.parallel)
     api_cfg = cfg.get("clash-api", {})
-    print("[1/5] 连接 Clash/mihomo 控制端 ...")
-    api = ClashAPI(
-        socket_path=api_cfg.get("socket") or None,
-        host=api_cfg.get("host") or None,
-        port=api_cfg.get("port") or None,
-    )
-    mode_before = api.get_mode()
-    global_before = api.get_global_now()
-    print(f"      控制端 OK（当前模式={mode_before}, GLOBAL={global_before}）")
-
-    # ---------- 节点列表 ----------
-    if args.nodes:
-        nodes = [n.strip() for n in args.nodes.split(",") if n.strip()]
+    skip_types = set(cfg.get("skip-types", []))
+    if parallel > 1:
+        # 并行模式：节点列表也从临时实例取，全程不依赖/不触碰主实例
+        print("[1/5] 并行模式：临时 mihomo 实例（不触碰主 Clash）...")
+        from mihomo_pool import MihomoPool
+        pool_probe = MihomoPool(1)
+        inst = pool_probe.start()[0]
+        api = ClashAPI(host="127.0.0.1", port=inst.ctl_port)
+        print(f"      实例 OK（mixed-port={inst.mixed_port}, ctl={inst.ctl_port}）")
+        if args.nodes:
+            nodes = [n.strip() for n in args.nodes.split(",") if n.strip()]
+        else:
+            nodes = [n for n, t in api.list_real_nodes(with_type=True) if t not in skip_types]
+        pool_probe.stop()
+        print(f"[2/5] 待测节点 {len(nodes)} 个")
+        mode_before = global_before = None
     else:
-        skip_types = set(cfg.get("skip-types", []))
-        nodes = [n for n, t in api.list_real_nodes(with_type=True) if t not in skip_types]
-    print(f"[2/5] 待测节点 {len(nodes)} 个")
+        print("[1/5] 连接 Clash/mihomo 控制端 ...")
+        api = ClashAPI(
+            socket_path=api_cfg.get("socket") or None,
+            host=api_cfg.get("host") or None,
+            port=api_cfg.get("port") or None,
+        )
+        mode_before = api.get_mode()
+        global_before = api.get_global_now()
+        print(f"      控制端 OK（当前模式={mode_before}, GLOBAL={global_before}）")
+        if args.nodes:
+            nodes = [n.strip() for n in args.nodes.split(",") if n.strip()]
+        else:
+            nodes = [n for n, t in api.list_real_nodes(with_type=True) if t not in skip_types]
+        print(f"[2/5] 待测节点 {len(nodes)} 个")
 
-    # ---------- 切 global ----------
-    print("[3/5] 切换 global 模式，启动 headless Chrome...")
-    if not args.no_restore:
+    # ---------- 切 global（仅串行模式需要） ----------
+    if parallel > 1:
+        print(f"[3/5] 并行检测（{parallel} 个出口，临时实例端口 7898+）...")
+    else:
+        print("[3/5] 切换 global 模式，启动 headless Chrome...")
+    if parallel == 1 and not args.no_restore:
         api.set_mode("global")
 
     os.makedirs(args.out, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     tsv_path = os.path.join(args.out, f"verdicts-{ts}.tsv")
     json_path = os.path.join(args.out, f"verdicts-{ts}.json")
-    results = []
 
-    with HeadlessChrome(proxy_port=proxy_port, chrome_path=args.chrome) as chrome:
-        for i, node in enumerate(nodes, 1):
-            ok = api.switch_global(node)
-            if not ok:
-                print(f"  [{i}/{len(nodes)}] 切换失败: {node}")
-                results.append({"node": node, "verdict": "ERROR", "reply": "switch failed"})
-                continue
-            time.sleep(sleep_sec)
-            r = test_node(chrome, node)
-            results.append(r)
-            v = r["verdict"]
-            c_ = COLOR.get(v, "")
-            print(f"  [{i}/{len(nodes)}] {c_}{v:<10}{COLOR['RESET']} {node}  {r['reply'][:60]}")
+    def on_result(node, r, worker_id, seq):
+        v = r["verdict"]
+        c_ = COLOR.get(v, "")
+        tag = f"W{worker_id + 1}" if parallel > 1 else ""
+        print(f"  [{seq}/{len(nodes)}] {c_}{v:<10}{COLOR['RESET']} {tag} {node}  {r['reply'][:60]}")
 
-    # ---------- 恢复环境 ----------
-    if not args.no_restore:
+    results = scan_nodes(api, proxy_port, nodes, parallel=parallel,
+                         chrome_path=args.chrome, sleep_sec=sleep_sec,
+                         on_result=on_result)
+
+    # ---------- 恢复环境（仅串行模式动过主实例） ----------
+    if parallel == 1 and not args.no_restore:
         try:
             api.set_mode(mode_before)
             if global_before and global_before != "DIRECT":
                 api.switch_global(global_before)
         except Exception as e:
             print(f"  ! 环境恢复警告: {e}")
-    print(f"[4/5] 环境已恢复（mode={mode_before}）")
+    if parallel == 1:
+        print(f"[4/5] 环境已恢复（mode={mode_before}）")
 
     # ---------- 落盘 + 规则 ----------
     with open(tsv_path, "w", encoding="utf-8") as f:
