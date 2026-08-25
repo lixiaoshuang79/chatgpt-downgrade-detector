@@ -394,7 +394,7 @@
     </div>
   </section>
 
-  <footer>headless 零弹窗检测 · 自动恢复环境 · MIT License</footer>
+  <footer>Clash 节点检测 · 自动恢复环境 · MIT License</footer>
 </div>
 
 <!-- 插件安装步骤模态框 -->
@@ -619,7 +619,7 @@ async function showRules() {
     $('rulesHint').innerHTML =
       `检测到 <b style="color:var(--green)">${r.clean.length}</b> 个干净节点。<br>
        ① 复制规则 → 粘贴到 Clash 配置（proxy-groups 段合并，rules 段置顶）；
-       ② 或用「写入 Clash Verge 扩展」一键写入当前订阅链，再到 Clash Verge 订阅页点<b>「重新激活订阅」</b>生效。`;
+       ② 或用「写入 Clash Verge 扩展」写入当前订阅链，再到 Clash Verge 订阅页点<b>「重新激活订阅」</b>生效。`;
   } else {
     $('rulesPanel').hidden = false;
     $('rulesText').textContent = '# 暂未检测出干净节点 — 可尝试换机场 / 换 IP 池后重测';

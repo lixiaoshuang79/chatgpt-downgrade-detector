@@ -4,7 +4,7 @@
 1. **通用 mihomo/Clash 配置片段**（默认，适用于任意 Clash 系客户端）：
    - proxy-groups: 新增 ChatGPT-LUNA Selector 组（干净节点为成员）
    - rules: 4 条 OpenAI 域名 → ChatGPT-LUNA（放在规则顶部，优先于订阅自带规则）
-2. **Clash Verge Rev 扩展自动写入**（--verge 模式，macOS 实测）：
+2. **Clash Verge Rev 扩展自动写入**（--verge 模式）：
    自动探测 profiles 目录，把组写入当前订阅链的 groups 扩展、规则写入 rules 扩展。
 
 注意：Clash Verge 的 proxies 扩展只接受真实代理节点定义（放组会报
@@ -132,5 +132,5 @@ def write_verge_extensions(clean_nodes: list, group_name: str = GROUP_NAME,
 
 if __name__ == "__main__":
     # 自测
-    demo = ["韩国KR-HY2", "台湾-优化", "法国FR-A"]
+    demo = ["美国-洛杉矶", "台湾-台北", "法国-巴黎"]
     print(generate_rules_yaml(demo))

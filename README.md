@@ -63,8 +63,8 @@ python3 detector/main.py
       控制端 OK（当前模式=rule, GLOBAL=DIRECT）
 [2/5] 待测节点 43 个
 [3/5] 切换 global 模式，启动 headless Chrome...
-  [1/43] LUNA        韩国KR-HY2  GPT-5.6 Luna
-  [2/43] LOGIN_WALL  日本-优化3  Sign in is required to continue.
+  [1/43] LUNA        美国-洛杉矶  GPT-5.6 Luna
+  [2/43] LOGIN_WALL  日本-东京    Sign in is required to continue.
   ...
 [4/5] 环境已恢复（mode=rule）
 [5/5] 完成: 干净 8 | 半干净 4 | 降智 31 | 异常 0
@@ -75,7 +75,7 @@ proxy-groups:
   - name: ChatGPT-LUNA
     type: select
     proxies:
-      - 韩国KR-HY2
+      - 美国-洛杉矶
       ...
 rules:
   - DOMAIN-SUFFIX,openai.com,ChatGPT-LUNA
@@ -104,7 +104,7 @@ python3 detector/main.py --verge
 
 - 进站自动核验浏览器时区与出口 IP 是否匹配（IP 查询走后台服务，绕开页面 CSP）
 - 不匹配时在页面脚本执行前自动把浏览器时区改为与 IP 一致（`chrome.debugger` + `Emulation.setTimezoneOverride`）
-- 解决「IP 干净但时区对不上」导致的降智——时区指纹 × IP 地理交叉比对是 OpenAI 0821 大规模降智的主要变量
+- 解决「IP 干净但时区对不上」导致的降智——OpenAI 风控会交叉比对浏览器时区与出口 IP 的地理位置，两者不一致容易被判定为异常
 
 安装（未打包版）：`chrome://extensions` → 开启开发者模式 → 「加载已解压的扩展程序」→ 选择 `extension/` 目录。
 分发：`extension/chatgpt-tz-fix-extension-v3.1.1.zip` 为打包版（安装方法见 [docs/extension-install.md](docs/extension-install.md)）。
@@ -129,7 +129,7 @@ python3 detector/main.py --verge
 └────────────────────────────────────────────────────────────┘
 ```
 
-### 关键实现细节（全部实战踩坑验证）
+### 关键实现细节
 
 1. **headless Chrome**：`--headless=new` + CDP（Chrome 151+ 的 `/json/new` 必须用 PUT）
 2. **过 Cloudflare**：headless 默认 UA 带 `HeadlessChrome` 标记会被 CF 拦 → 伪装 UA + 关闭自动化标记
@@ -159,7 +159,7 @@ chatgpt-downgrade-detector/
 
 ```bash
 # 只测指定节点（快速验证）
-python3 detector/main.py --nodes "韩国KR-HY2,法国FR-A"
+python3 detector/main.py --nodes "美国-洛杉矶,法国-巴黎"
 
 # 指定配置
 python3 detector/main.py --config config.yaml

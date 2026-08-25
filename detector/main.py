@@ -2,7 +2,7 @@
 
 用法：
   python3 main.py                          # 全节点检测
-  python3 main.py --nodes "韩国KR-HY2,法国FR-A"   # 只测指定节点
+  python3 main.py --nodes "美国-洛杉矶,法国-巴黎"   # 只测指定节点
   python3 main.py --verge                  # 检测后把干净节点写入 Clash Verge 扩展
   python3 main.py --config config.yaml     # 指定配置
 

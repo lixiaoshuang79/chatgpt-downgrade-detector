@@ -17,7 +17,7 @@ chrome: ""
 
 # 只用这些节点（留空 = 测全部真实节点）
 nodes: []
-# 例: nodes: ["韩国KR-HY2", "台湾-优化", "法国FR-A"]
+# 例: nodes: ["美国-洛杉矶", "日本-东京"]
 
 # 跳过指定协议类型（可选: vmess vless trojan ss ssr hysteria2 anytls wireguard）
 skip-types: []
