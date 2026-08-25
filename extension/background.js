@@ -1,10 +1,10 @@
-// ChatGPT 指纹核验 + 一键改时区 —— background (MV3 service worker)
+// ChatGPT 指纹核验 + 自动改时区 —— background (MV3 service worker)
 // 核心：chrome.debugger attach 到 chatgpt tab → Emulation.setTimezoneOverride 改时区
 // 注意：改时区后必须保持 attach，否则时区设置会随 detach 丢失（浏览器顶部会出现调试提示条，属正常）
 
 const CDP_VERSION = '1.3';
 
-// 记录已附加的 tab 与时区（session 级，浏览器重启后清空，需重新一键）
+// 记录已附加的 tab 与时区（session 级，浏览器重启后清空，需重新附加）
 let attached = { tabId: null, tz: null };
 
 function attach(tabId) {

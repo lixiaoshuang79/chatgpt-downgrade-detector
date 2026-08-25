@@ -1,6 +1,6 @@
 # ChatGPT 降智检测器（chatgpt-downgrade-detector）
 
-> 一键检测本地 Clash 系代理所有节点的 ChatGPT「降智」情况，自动把干净节点写入顶级规则，让 ChatGPT 流量只走它们——全程 headless 零弹窗，不打扰你前台工作。
+> 检测本地 Clash 系代理各节点的 ChatGPT「降智」情况，自动把干净节点写入顶级规则，让 ChatGPT 流量只走这些节点。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -14,41 +14,35 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 | **MINI**（GPT-5.5-mini） | 匿名只能用小模型 | ⚠️ 半干净 |
 | **LOGIN_WALL**（Sign in is required） | 匿名被强制登录 | ❌ 降智名单 |
 
-大多数机场/机房 IP 都在降智名单里（实测：某机场 43 节点只有 8 个干净）。本工具自动找出你本地代理里**真正干净**的节点，并把 `openai.com / chatgpt.com / oaiusercontent.com / oaistatic.com` 的流量**只**指向这些节点。
+机房/机场 IP 普遍在降智名单内。本工具遍历本地代理的全部真实节点，找出当前干净的节点，并把 `openai.com / chatgpt.com / oaiusercontent.com / oaistatic.com` 的流量**只**指向这些节点。
 
 ## 特性
 
-- 🔍 **全节点自动检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
-- 🖥️ **headless 零弹窗**：Chrome 无头模式 + CDP 驱动，不弹任何窗口，不打断你的工作
-- 🎨 **Web GUI**：本地网页界面，深色现代风格——统计仪表盘、实时进度、节点状态列表、一键应用规则
-- 📐 **自动生成顶级规则**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
-- 🔌 **Clash Verge Rev 深度集成**（`--verge` / GUI 按钮）：自动把组/规则写入当前订阅链的扩展文件，点一下「重新激活订阅」即生效
+- 🔍 **全节点检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
+- 🖥️ **原生桌面 GUI**：PySide6 (Qt) 深色主题；节点勾选、实时进度、统计、规则应用在一个窗口内完成
+- 📐 **顶级规则生成**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
+- 🔌 **Clash Verge Rev 集成**（`--verge` / GUI 按钮）：把组/规则写入当前订阅链的扩展文件，重新激活订阅后生效
 - 🌐 **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.0），解决「IP 干净但时区指纹不匹配」的降智
 - 🛡️ **环境自动恢复**：检测完自动恢复原模式与节点选择
 
 ## 快速开始
 
-### Web GUI（推荐）
+### 桌面 GUI
 
 ```bash
-pip install -r requirements.txt
-python3 detector/gui.py          # 默认 127.0.0.1:8899，自动打开浏览器
-python3 detector/gui.py --port 9000 --no-open   # 自定义端口 / 不自动打开
+pip install -r requirements.txt        # 含 PySide6
+python3 detector/gui.py
 ```
 
-![GUI 初始状态](docs/screenshots/gui-initial.png)
-
-![GUI 检测中](docs/screenshots/gui-scanning.png)
-
-![GUI v1.2（节点勾选 + 插件可选安装）](docs/screenshots/gui-v12.png)
-
 界面功能：
-- **节点可选检测**：节点列表可勾选，只测选中的节点（默认全选，支持全选/取消全选）
-- **统计仪表盘**：干净（LUNA）/ 半干净（MINI）/ 降智（LOGIN_WALL）/ 异常（ERROR）实时计数
+- **节点勾选**：列表可勾选，只测选中的节点（默认全选，支持全选/取消全选）
+- **统计**：干净（LUNA）/ 半干净（MINI）/ 降智（LOGIN_WALL）/ 异常（ERROR）实时计数
 - **节点列表**：按状态着色，支持筛选（全部/干净/半干净/降智/异常）
-- **开始检测 / 停止**：一键检测勾选节点，随时可停（停止后自动恢复 Clash 环境）
-- **规则面板**：检测完成后自动展示顶级规则 → 一键复制 / 一键写入 Clash Verge 扩展
-- **浏览器插件（可选安装）**：界面内置「⬇ 下载插件」+「📖 安装步骤」（3 步向导），不强制安装
+- **检测控制**：开始 / 停止（停止后自动恢复 Clash 环境）
+- **规则应用**：检测完成后生成顶级规则 → 复制到剪贴板 / 写入 Clash Verge 扩展
+- **浏览器插件**：界面显示插件 zip 与目录入口（安装方法见 [docs/extension-install.md](docs/extension-install.md)）
+
+macOS 桌面入口：双击 `start-gui.command`，或运行 `python3 detector/gui.py`。
 
 ### 命令行
 
@@ -57,7 +51,7 @@ git clone https://github.com/lixiaoshuang79/chatgpt-downgrade-detector.git
 cd chatgpt-downgrade-detector
 pip install -r requirements.txt
 
-# 一键检测（自动探测 Clash 控制端：Clash Verge Rev unix socket / TCP 9090 / 7890）
+# 检测（自动探测 Clash 控制端：Clash Verge Rev unix socket / TCP 9090 / 7890）
 python3 detector/main.py
 ```
 
@@ -67,7 +61,7 @@ python3 detector/main.py
 [1/5] 连接 Clash/mihomo 控制端 ...
       控制端 OK（当前模式=rule, GLOBAL=DIRECT）
 [2/5] 待测节点 43 个
-[3/5] 切换 global 模式，启动 headless Chrome（零弹窗）...
+[3/5] 切换 global 模式，启动 headless Chrome...
   [1/43] LUNA        韩国KR-HY2  GPT-5.6 Luna
   [2/43] LOGIN_WALL  日本-优化3  Sign in is required to continue.
   ...
@@ -136,7 +130,7 @@ python3 detector/main.py --verge
 
 ### 关键实现细节（全部实战踩坑验证）
 
-1. **零弹窗**：`--headless=new` + CDP（Chrome 151+ 的 `/json/new` 必须用 PUT）
+1. **headless Chrome**：`--headless=new` + CDP（Chrome 151+ 的 `/json/new` 必须用 PUT）
 2. **过 Cloudflare**：headless 默认 UA 带 `HeadlessChrome` 标记会被 CF 拦 → 伪装 UA + 关闭自动化标记
 3. **防会话污染（最重要）**：匿名 ChatGPT 会话存 localStorage，跨 tab 共享——首节点测出 LUNA 后，后续节点会读到残留回复全部假 LUNA。因此每节点测试前强制 `clearBrowserCookies` + `localStorage.clear()` 再重新导航，测完关闭自己的 tab
 4. **React 受控输入**：textarea 需原生 setter + input 事件 + 等待状态同步后才能点发送按钮
@@ -147,12 +141,10 @@ python3 detector/main.py --verge
 ```
 chatgpt-downgrade-detector/
 ├── detector/
-│   ├── main.py            # 一键 CLI（检测 + 规则生成 + --verge 写入）
-│   ├── gui.py             # Web GUI 入口（本地服务 + 自动开浏览器）
-│   ├── gui_server.py      # GUI 后端（HTTP API + 后台检测线程）
-│   ├── gui_static/        # 前端界面（单文件，深色现代 UI）
+│   ├── main.py            # CLI（检测 + 规则生成 + --verge 写入）
+│   ├── gui.py             # 原生桌面 GUI（PySide6 / Qt）
 │   ├── clash_api.py       # Clash/mihomo REST 封装（unix socket + TCP 自适应）
-│   ├── cdp_tester.py      # headless Chrome CDP 三判定（零弹窗）
+│   ├── cdp_tester.py      # headless Chrome CDP 三判定
 │   ├── rules.py           # 规则生成器（片段 / Clash Verge 扩展）
 │   └── config.example.yaml
 ├── extension/             # 浏览器插件（指纹核验 + 自动改时区 v3.1.0）
@@ -163,7 +155,7 @@ chatgpt-downgrade-detector/
 ## 高级用法
 
 ```bash
-# 只测指定节点（秒级验证）
+# 只测指定节点（快速验证）
 python3 detector/main.py --nodes "韩国KR-HY2,法国FR-A"
 
 # 指定配置

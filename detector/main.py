@@ -1,4 +1,4 @@
-"""ChatGPT 降智检测器 —— 一键检测 Clash 全部节点的降智情况，并生成顶级规则。
+"""ChatGPT 降智检测器 —— 检测 Clash 全部节点的降智情况，并生成顶级规则。
 
 用法：
   python3 main.py                          # 全节点检测
@@ -78,7 +78,7 @@ def main():
     print(f"[2/5] 待测节点 {len(nodes)} 个")
 
     # ---------- 切 global ----------
-    print("[3/5] 切换 global 模式，启动 headless Chrome（零弹窗）...")
+    print("[3/5] 切换 global 模式，启动 headless Chrome...")
     if not args.no_restore:
         api.set_mode("global")
 

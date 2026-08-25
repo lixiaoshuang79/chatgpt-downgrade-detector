@@ -1,4 +1,4 @@
-"""Headless Chrome CDP 三判定检测器（零弹窗，不打扰用户前台工作）。
+"""Headless Chrome CDP 三判定检测器。
 
 原理（2026-08 实战验证）：
   OpenAI 对降智名单内的 IP，未登录访问 chatgpt.com 会强制登录（Sign in is required），
