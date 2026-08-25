@@ -143,7 +143,7 @@ def main():
             print(f"      Clash Verge 扩展已写入: {info['note']}")
             print(f"        groups: {info['groups_extension']}")
             print(f"        rules : {info['rules_extension']}")
-            print("      ⚠️ 请到 Clash Verge 订阅页点「重新激活订阅」生效")
+            print("      ! 请到 Clash Verge 订阅页点「重新激活订阅」生效")
         except Exception as e:
             print(f"      ! Verge 扩展写入失败: {e}")
 

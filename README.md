@@ -10,20 +10,20 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 
 | 判定 | 表现 | IP 状态 |
 |---|---|---|
-| **LUNA**（GPT-5.6 Luna） | 匿名可正常对话，回复「GPT-5.6 Luna」 | ✅ 干净 |
-| **MINI**（GPT-5.5-mini） | 匿名只能用小模型 | ⚠️ 半干净 |
-| **LOGIN_WALL**（Sign in is required） | 匿名被强制登录 | ❌ 降智名单 |
+| **LUNA**（GPT-5.6 Luna） | 匿名可正常对话，回复「GPT-5.6 Luna」 | 干净 |
+| **MINI**（GPT-5.5-mini） | 匿名只能用小模型 | 半干净 |
+| **LOGIN_WALL**（Sign in is required） | 匿名被强制登录 | 降智名单 |
 
 机房/机场 IP 普遍在降智名单内。本工具遍历本地代理的全部真实节点，找出当前干净的节点，并把 `openai.com / chatgpt.com / oaiusercontent.com / oaistatic.com` 的流量**只**指向这些节点。
 
 ## 特性
 
-- 🔍 **全节点检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
-- 🖥️ **Web GUI**：本地网页界面（127.0.0.1 自动打开），节点勾选、实时进度、统计、规则应用
-- 📐 **顶级规则生成**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
-- 🔌 **Clash Verge Rev 集成**（`--verge` / GUI 按钮）：把组/规则写入当前订阅链的扩展文件，重新激活订阅后生效
-- 🌐 **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.1），解决「IP 干净但时区指纹不匹配」的降智
-- 🛡️ **环境自动恢复**：检测完自动恢复原模式与节点选择
+- **全节点检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
+- **Web GUI**：本地网页界面（127.0.0.1 自动打开），节点勾选、实时进度、统计、规则应用
+- **顶级规则生成**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
+- **Clash Verge Rev 集成**（`--verge` / GUI 按钮）：把组/规则写入当前订阅链的扩展文件，重新激活订阅后生效
+- **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.1），解决「IP 干净但时区指纹不匹配」的降智
+- **环境自动恢复**：检测完自动恢复原模式与节点选择
 
 ## 快速开始
 
@@ -109,7 +109,7 @@ python3 detector/main.py --verge
 安装（未打包版）：`chrome://extensions` → 开启开发者模式 → 「加载已解压的扩展程序」→ 选择 `extension/` 目录。
 分发：`extension/chatgpt-tz-fix-extension-v3.1.1.zip` 为打包版（安装方法见 [docs/extension-install.md](docs/extension-install.md)）。
 
-> ⚠️ 使用 `chrome.debugger` 改时区后，浏览器顶部会出现「xxx 正在调试此浏览器」提示条——这是 debugger API 的正常副作用（保持附加时区才生效），不影响使用；浏览器重启后扩展会自动重新附加。
+> 使用 `chrome.debugger` 改时区后，浏览器顶部会出现「xxx 正在调试此浏览器」提示条——这是 debugger API 的正常副作用（保持附加时区才生效），不影响使用；浏览器重启后扩展会自动重新附加。
 
 ## 工作原理
 
