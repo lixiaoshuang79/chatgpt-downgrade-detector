@@ -22,7 +22,7 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 - 🖥️ **Web GUI**：本地网页界面（127.0.0.1 自动打开），节点勾选、实时进度、统计、规则应用
 - 📐 **顶级规则生成**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
 - 🔌 **Clash Verge Rev 集成**（`--verge` / GUI 按钮）：把组/规则写入当前订阅链的扩展文件，重新激活订阅后生效
-- 🌐 **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.0），解决「IP 干净但时区指纹不匹配」的降智
+- 🌐 **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.1），解决「IP 干净但时区指纹不匹配」的降智
 - 🛡️ **环境自动恢复**：检测完自动恢复原模式与节点选择
 
 ## 快速开始
@@ -100,14 +100,14 @@ python3 detector/main.py --verge
 
 ## 浏览器插件（配套）
 
-`extension/` 目录包含 **ChatGPT 指纹核验 + 自动改时区** 扩展（v3.1.0）：
+`extension/` 目录包含 **ChatGPT 指纹核验 + 自动改时区** 扩展（v3.1.1）：
 
 - 进站自动核验浏览器时区与出口 IP 是否匹配（IP 查询走后台服务，绕开页面 CSP）
 - 不匹配时在页面脚本执行前自动把浏览器时区改为与 IP 一致（`chrome.debugger` + `Emulation.setTimezoneOverride`）
 - 解决「IP 干净但时区对不上」导致的降智——时区指纹 × IP 地理交叉比对是 OpenAI 0821 大规模降智的主要变量
 
 安装（未打包版）：`chrome://extensions` → 开启开发者模式 → 「加载已解压的扩展程序」→ 选择 `extension/` 目录。
-分发：`extension/chatgpt-tz-fix-extension-v3.1.0.zip` 为打包版（安装方法见 [docs/extension-install.md](docs/extension-install.md)）。
+分发：`extension/chatgpt-tz-fix-extension-v3.1.1.zip` 为打包版（安装方法见 [docs/extension-install.md](docs/extension-install.md)）。
 
 > ⚠️ 使用 `chrome.debugger` 改时区后，浏览器顶部会出现「xxx 正在调试此浏览器」提示条——这是 debugger API 的正常副作用（保持附加时区才生效），不影响使用；浏览器重启后扩展会自动重新附加。
 
@@ -150,7 +150,7 @@ chatgpt-downgrade-detector/
 │   ├── cdp_tester.py      # headless Chrome CDP 三判定
 │   ├── rules.py           # 规则生成器（片段 / Clash Verge 扩展）
 │   └── config.example.yaml
-├── extension/             # 浏览器插件（指纹核验 + 自动改时区 v3.1.0）
+├── extension/             # 浏览器插件（指纹核验 + 自动改时区 v3.1.1）
 ├── docs/extension-install.md
 └── examples/              # 配置示例与结果样例
 ```

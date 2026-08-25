@@ -1,4 +1,4 @@
-# 浏览器插件安装说明（ChatGPT 指纹核验 + 自动改时区 v3.1.0）
+# 浏览器插件安装说明（ChatGPT 指纹核验 + 自动改时区 v3.1.1）
 
 ## 适用浏览器
 Chrome / Edge / Chromium（Manifest V3）。
@@ -13,7 +13,7 @@ Chrome / Edge / Chromium（Manifest V3）。
 
 ## 安装（打包版 zip，分发给同事）
 
-1. 解压 `chatgpt-tz-fix-extension-v3.1.0.zip`
+1. 解压 `chatgpt-tz-fix-extension-v3.1.1.zip`
 2. 同上步骤「加载已解压的扩展程序」（zip 需先解压）
 
 > 给同事的注意事项：打包版未上架 Chrome 商店，加载时浏览器会提示

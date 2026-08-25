@@ -13,14 +13,23 @@
   // OpenAI /backend-api/me 的 region 城市 → 期望 IANA 时区映射
   const CITY_TZ = {
     'tokyo': 'Asia/Tokyo', 'osaka': 'Asia/Tokyo',
-    'seoul': 'Asia/Seoul',
+    'seoul': 'Asia/Seoul', 'incheon': 'Asia/Seoul',
     'taipei': 'Asia/Taipei', 'hong kong': 'Asia/Hong_Kong',
     'singapore': 'Asia/Singapore',
     'toronto': 'America/Toronto', 'montreal': 'America/Toronto',
     'vancouver': 'America/Vancouver',
     'new york': 'America/New_York', 'dallas': 'America/Chicago', 'chicago': 'America/Chicago',
     'los angeles': 'America/Los_Angeles', 'san jose': 'America/Los_Angeles', 'san francisco': 'America/Los_Angeles', 'seattle': 'America/Los_Angeles',
-    'paris': 'Europe/Paris', 'frankfurt': 'Europe/Berlin', 'amsterdam': 'Europe/Amsterdam', 'london': 'Europe/London'
+    'paris': 'Europe/Paris', 'frankfurt': 'Europe/Berlin', 'amsterdam': 'Europe/Amsterdam', 'london': 'Europe/London',
+    'kyiv': 'Europe/Kyiv', 'istanbul': 'Europe/Istanbul', 'kolkata': 'Asia/Kolkata'
+  };
+  // 城市查不到时的国家兜底（仅单时区国家/地区；多时区大国不兜底，避免错判）
+  const COUNTRY_TZ = {
+    'kr': 'Asia/Seoul', 'jp': 'Asia/Tokyo', 'tw': 'Asia/Taipei',
+    'hk': 'Asia/Hong_Kong', 'sg': 'Asia/Singapore', 'mo': 'Asia/Macau',
+    'fr': 'Europe/Paris', 'de': 'Europe/Berlin', 'gb': 'Europe/London',
+    'nl': 'Europe/Amsterdam', 'ua': 'Europe/Kyiv', 'tr': 'Europe/Istanbul',
+    'in': 'Asia/Kolkata', 'kr': 'Asia/Seoul'
   };
 
   const STYLE = `
@@ -112,6 +121,10 @@
       const t = CITY_TZ[String(me.region).toLowerCase()];
       if (t) return t;
     }
+    if (me && me.country) {
+      const t = COUNTRY_TZ[String(me.country).toLowerCase()];
+      if (t) return t;
+    }
     return null;
   }
 
@@ -189,7 +202,12 @@
     if (!state.expectTz) {
       title = '⚠️ ChatGPT 指纹核验 — 无法判定';
       cls = 'bad';
-      rows.push(['提示', '拿不到期望时区，请确认已登录']);
+      if (state.me && state.me.country) {
+        rows.push(['提示', '出口国家/城市不在映射表（' + esc(state.me.country + '/' + (state.me.region || '?')) +
+          '），无法确定期望时区。可先按 IP 时区手动核验']);
+      } else {
+        rows.push(['提示', '拿不到出口位置信息（me 接口失败），请确认已登录']);
+      }
     } else if (match) {
       title = '🟢 时区与出口匹配';
       cls = 'ok';
