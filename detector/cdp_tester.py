@@ -153,7 +153,129 @@ class Verdict:
     ERROR = "ERROR"          # 页面异常/无回复
 
 
-def test_node(chrome, node_name: str, timeout_page=70, timeout_reply=70) -> dict:
+def _dismiss_cookie_banner(cdp) -> str:
+    """处理 ChatGPT 首次访问的 Cookie 弹窗。
+
+    新版界面（wm-composer）未处理 Cookie 弹窗时，发送按钮虽显示可用但点击无效，
+    消息发不出去 → 必须先把弹窗点掉（模拟真实用户首次访问的行为）。
+    多语言兜底匹配（中文界面/英文界面）。
+    """
+    try:
+        return cdp.ev("""(() => {
+            const btns = [...document.querySelectorAll('button')];
+            const ACCEPT = ['全部接受', '接受全部', 'Accept all', 'Agree', 'I agree'];
+            const REJECT = ['拒绝非必需', '拒绝', 'Reject', 'Decline'];
+            const pick = (list) => btns.find(x => {
+                const a = x.getAttribute('aria-label') || '';
+                const t = (x.textContent || '').trim();
+                return list.some(l => a.includes(l) || t === l || t.includes(l));
+            });
+            const b = pick(ACCEPT) || pick(REJECT);
+            if (!b) return 'NONE';
+            b.click();
+            return 'CLICKED';
+        })()""")
+    except Exception:
+        return "EVAL_ERR"
+
+
+def _type_and_send(cdp) -> str:
+    """设值 → 等发送按钮可用 → 点击 → 确认消息已进入对话。返回状态字符串。"""
+    try:
+        cdp.ev(
+            "(() => { const ta = document.querySelector('textarea');"
+            " if (!ta) return 'NOTA';"
+            " const setter = Object.getOwnPropertyDescriptor("
+            "   window.HTMLTextAreaElement.prototype, 'value').set;"
+            f" setter.call(ta, {json.dumps(QUESTION)});"
+            " ta.dispatchEvent(new Event('input', {bubbles:true}));"
+            " ta.dispatchEvent(new Event('change', {bubbles:true}));"
+            " ta.focus(); return 'SET'; })()")
+    except Exception as e:
+        return f"SET_ERR:{str(e)[:60]}"
+
+    # 等发送按钮可用（React 同步需要时间，页面卡时更久）
+    st = "TIMEOUT"
+    for _ in range(15):
+        time.sleep(1)
+        try:
+            st = cdp.ev(
+                "(() => { const b = [...document.querySelectorAll('button')]"
+                ".find(b => (b.getAttribute('aria-label') || '').includes('发送')"
+                " || (b.getAttribute('aria-label') || '').includes('Send'));"
+                " return b ? (b.disabled ? 'DISABLED' : 'READY') : 'NOBTN'; })()")
+            if st == "READY":
+                break
+        except Exception:
+            pass
+    if st != "READY":
+        return f"BTN:{st}"
+
+    # 点击发送
+    try:
+        cdp.ev(
+            "(() => { const b = [...document.querySelectorAll('button')]"
+            ".find(b => (b.getAttribute('aria-label') || '').includes('发送')"
+            " || (b.getAttribute('aria-label') || '').includes('Send'));"
+            " if (!b) return 'NOBTN'; b.click(); return 'SENT'; })()")
+    except Exception as e:
+        return f"CLICK_ERR:{str(e)[:60]}"
+
+    # 确认已发送：消息进入对话（出现「你说/You said」）或输入框已清空
+    for _ in range(10):
+        time.sleep(1)
+        try:
+            ok = cdp.ev(
+                "(() => { const t = document.body.innerText || '';"
+                " const ta = document.querySelector('textarea');"
+                " return (t.includes('你说') || t.includes('You said')"
+                " || !ta || !ta.value) ? 'OK' : 'PENDING'; })()")
+            if ok == "OK":
+                return "SENT_OK"
+        except Exception:
+            pass
+    return "SENT_UNCONFIRMED"
+
+
+def _wait_reply(cdp, timeout_reply: float) -> str | None:
+    """等模型回复，返回判定（LUNA/MINI/LOGIN_WALL）或 None（超时）。
+
+    关键：页面/回复慢时绝不提前下结论——
+      - 检测到「正在生成」（停止按钮 / 文本在增长）就把等待窗口顺延，
+        直到生成结束或拿到明确判定；
+      - 总上限 = timeout_reply + 120s，防异常节点无限拖。
+    """
+    base_deadline = time.time() + timeout_reply
+    hard_deadline = base_deadline + 120
+    active_until = base_deadline
+    last_len = 0
+    while time.time() < active_until and time.time() < hard_deadline:
+        time.sleep(2)
+        try:
+            r = cdp.ev(
+                "(() => { const t = document.body.innerText || '';"
+                " return JSON.stringify({len: t.length,"
+                " stop: !!document.querySelector('[data-testid=\"stop-button\"]')"
+                " || t.includes('停止生成') || t.includes('Stop generating'),"
+                " tail: t.slice(-900)}); })()")
+            d = json.loads(r)
+        except Exception:
+            continue
+        t = d["tail"]
+        if "Sign in is required" in t:
+            return Verdict.LOGIN_WALL
+        if "GPT-5.6" in t or "Luna" in t:
+            return Verdict.LUNA
+        if "GPT-5.5" in t or "mini" in t:
+            return Verdict.MINI
+        # 活性检测：正在生成或文本在增长 → 顺延等待窗口
+        if d["stop"] or d["len"] > last_len:
+            active_until = max(active_until, time.time() + 15)
+        last_len = d["len"]
+    return None
+
+
+def test_node(chrome, node_name: str, timeout_page=90, timeout_reply=120) -> dict:
     """在指定 Chrome 实例中测试当前出口（需已切好节点）的降智判定。"""
     # 1) 新建 tab（新版 Chrome 要求 PUT）
     req = urllib.request.Request(
@@ -175,7 +297,7 @@ def test_node(chrome, node_name: str, timeout_page=70, timeout_reply=70) -> dict
         except Exception:
             pass
 
-        # 3) 等页面加载
+        # 3) 等页面加载（页面慢时最多等 timeout_page 秒）
         page = None
         for _ in range(timeout_page // 2):
             time.sleep(2)
@@ -200,48 +322,28 @@ def test_node(chrome, node_name: str, timeout_page=70, timeout_reply=70) -> dict
             return {"node": node_name, "verdict": Verdict.ERROR,
                     "reply": "页面无输入框（未登录界面异常）"}
 
-        # 4) 发送问题：设值 → 等 React 同步 → 点发送按钮
-        send_res = None
-        try:
-            cdp.ev(
-                "(() => { const ta = document.querySelector('textarea');"
-                " if (!ta) return 'NOTA';"
-                " const setter = Object.getOwnPropertyDescriptor("
-                "   window.HTMLTextAreaElement.prototype, 'value').set;"
-                f" setter.call(ta, {json.dumps(QUESTION)});"
-                " ta.dispatchEvent(new Event('input', {bubbles:true}));"
-                " ta.dispatchEvent(new Event('change', {bubbles:true}));"
-                " ta.focus(); return 'SET'; })()")
-            time.sleep(2.5)
-            send_res = cdp.ev(
-                "(() => { const btn = document.querySelector("
-                "   'button[data-testid=\"send-button\"]') ||"
-                " [...document.querySelectorAll('button')].find(b =>"
-                "   b.getAttribute('aria-label') === '发送消息' ||"
-                "   b.getAttribute('aria-label') === 'Send message');"
-                " if (!btn) return 'NOSENDBTN'; if (btn.disabled) return 'DISABLED';"
-                " btn.click(); return 'SENT'; })()")
-        except Exception as e:
-            send_res = f"EVAL_ERR:{str(e)[:60]}"
+        # 3.5) 处理 Cookie 弹窗（新版界面不点掉则发送无效）
+        _dismiss_cookie_banner(cdp)
+        time.sleep(1)
 
-        # 5) 等回复
-        for _ in range(timeout_reply // 2):
-            time.sleep(2)
-            try:
-                r = cdp.ev(
-                    "(() => { const t = document.body.innerText;"
-                    " return {t: t.slice(-500),"
-                    " m: t.match(/GPT-5\\.\\d|5\\.6|5\\.5|luna|Luna|mini|Sign in is required[^\\n]*/g)}; })()")
-                t = (r or {}).get("t") or ""
-                if "Sign in is required" in t:
-                    return {"node": node_name, "verdict": Verdict.LOGIN_WALL,
-                            "reply": "Sign in is required to continue."}
-                if "GPT-5.6" in t or "luna" in t.lower():
-                    return {"node": node_name, "verdict": Verdict.LUNA, "reply": "GPT-5.6 Luna"}
-                if "GPT-5.5" in t or "mini" in t.lower():
-                    return {"node": node_name, "verdict": Verdict.MINI, "reply": "GPT-5.5-mini"}
-            except Exception:
-                pass
+        # 4) 发送问题：设值 → 等按钮可用 → 点击 → 确认发送成功
+        send_res = _type_and_send(cdp)
+        if send_res != "SENT_OK":
+            # 发送失败：先怀疑 Cookie 弹窗残留，重试一次
+            _dismiss_cookie_banner(cdp)
+            time.sleep(1)
+            send_res = _type_and_send(cdp)
+        if send_res != "SENT_OK":
+            return {"node": node_name, "verdict": Verdict.ERROR,
+                    "reply": f"发送失败 {send_res}"}
+
+        # 5) 等回复：活性顺延 + 明确判定才分类，超时如实报 ERROR
+        v = _wait_reply(cdp, timeout_reply)
+        if v is not None:
+            reply = {"node": node_name, "verdict": v,
+                     "reply": {"LUNA": "GPT-5.6 Luna", "MINI": "GPT-5.5-mini",
+                               "LOGIN_WALL": "Sign in is required to continue."}[v]}
+            return reply
 
         tail = ""
         try:
@@ -249,7 +351,7 @@ def test_node(chrome, node_name: str, timeout_page=70, timeout_reply=70) -> dict
         except Exception:
             pass
         return {"node": node_name, "verdict": Verdict.ERROR,
-                "reply": f"无回复 sendRes={send_res} tail={tail}"}
+                "reply": f"无回复 tail={tail}"}
     finally:
         # 关闭本 tab，杜绝会话残留污染下一个节点
         try:

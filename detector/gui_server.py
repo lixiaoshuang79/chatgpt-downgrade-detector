@@ -80,7 +80,7 @@ def _snapshot_node(node):
     return None
 
 
-def run_scan(nodes=None, sleep_sec=3.0, proxy_port=7897, chrome=None, parallel=1):
+def run_scan(nodes=None, sleep_sec=3.0, proxy_port=7897, chrome=None, parallel=1, timeout_reply=120):
     """后台检测线程。parallel=1 串行（主实例）；parallel>=2 并行（临时实例池，不碰主实例）。"""
     parallel = max(1, int(parallel))
     STATE.running = True
@@ -93,6 +93,7 @@ def run_scan(nodes=None, sleep_sec=3.0, proxy_port=7897, chrome=None, parallel=1
                 STATE.results.append(r)
             scan_nodes(None, proxy_port, nodes, parallel=parallel,
                        chrome_path=chrome, sleep_sec=sleep_sec,
+                       timeout_reply=timeout_reply,
                        on_result=on_result, stop_flag=lambda: STATE.stop_requested)
         else:
             api = get_clash()
@@ -113,7 +114,7 @@ def run_scan(nodes=None, sleep_sec=3.0, proxy_port=7897, chrome=None, parallel=1
                         STATE.results.append({"node": node, "verdict": Verdict.ERROR, "reply": "节点切换失败"})
                         continue
                     time.sleep(sleep_sec)
-                    r = test_node(chrome, node)
+                    r = test_node(chrome, node, timeout_reply=timeout_reply)
                     STATE.results.append(r)
                 STATE.done = len(nodes)
     except Exception as e:
@@ -241,6 +242,7 @@ class Handler(BaseHTTPRequestHandler):
             "sleep_sec": data.get("sleep", 3.0),
             "proxy_port": data.get("proxy_port", 7897),
             "parallel": parallel,
+            "timeout_reply": data.get("reply_timeout", 120),
         }, daemon=True)
         t.start()
         self._send(200, {"ok": True, "total": len(nodes), "parallel": parallel})

@@ -71,6 +71,9 @@ class ManagedMihomo:
         cfg["redir-port"] = 0
         cfg["external-controller"] = f"127.0.0.1:{self.ctl_port}"
         cfg.pop("secret", None)
+        # 关键：必须移除 unix 控制端配置——主实例用它（/tmp/verge/verge-mihomo.sock），
+        # 临时实例若沿用会抢占/覆盖同一个 socket 文件，导致主 Clash 控制端失效
+        cfg.pop("external-controller-unix", None)
         cfg["mode"] = "global"
         cfg["allow-lan"] = False
         cfg.pop("external-ui", None)

@@ -17,7 +17,7 @@ from cdp_tester import HeadlessChrome, test_node
 from mihomo_pool import MihomoPool
 
 
-def _worker(api, proxy_port, chrome_path, sleep_sec, node_list,
+def _worker(api, proxy_port, chrome_path, sleep_sec, timeout_reply, node_list,
             results, seq_holder, lock, on_result, worker_id, stop_flag=None):
     with HeadlessChrome(proxy_port=proxy_port, chrome_path=chrome_path) as chrome:
         for node in node_list:
@@ -30,7 +30,7 @@ def _worker(api, proxy_port, chrome_path, sleep_sec, node_list,
                 else:
                     if sleep_sec > 0:
                         time.sleep(sleep_sec)
-                    r = test_node(chrome, node)
+                    r = test_node(chrome, node, timeout_reply=timeout_reply)
             except Exception as e:
                 r = {"node": node, "verdict": "ERROR", "reply": str(e)[:80]}
             with lock:
@@ -42,7 +42,8 @@ def _worker(api, proxy_port, chrome_path, sleep_sec, node_list,
 
 
 def scan_nodes(api, proxy_port, nodes, parallel=1, chrome_path=None,
-               sleep_sec=3.0, on_result=None, stop_flag=None) -> list:
+               sleep_sec=3.0, timeout_reply=120, on_result=None,
+               stop_flag=None) -> list:
     """检测 nodes，返回结果列表（按输入顺序）。on_result(node, result, worker_id, seq) 可选。
 
     parallel == 1：串行使用传入的主实例（api/proxy_port）。
@@ -53,7 +54,7 @@ def scan_nodes(api, proxy_port, nodes, parallel=1, chrome_path=None,
     if parallel == 1 or len(nodes) <= 1:
         results, seq_holder = [], [0]
         lock = threading.Lock()
-        _worker(api, proxy_port, chrome_path, sleep_sec, nodes,
+        _worker(api, proxy_port, chrome_path, sleep_sec, timeout_reply, nodes,
                 results, seq_holder, lock, on_result, 0, stop_flag)
     else:
         pool = MihomoPool(parallel)
@@ -68,8 +69,9 @@ def scan_nodes(api, proxy_port, nodes, parallel=1, chrome_path=None,
             lock = threading.Lock()
             with ThreadPoolExecutor(max_workers=len(workers)) as ex:
                 futures = [
-                    ex.submit(_worker, wapi, wport, chrome_path, sleep_sec, sli,
-                              results, seq_holder, lock, on_result, wi, stop_flag)
+                    ex.submit(_worker, wapi, wport, chrome_path, sleep_sec,
+                              timeout_reply, sli, results, seq_holder, lock,
+                              on_result, wi, stop_flag)
                     for wi, ((wapi, wport), sli) in enumerate(zip(workers, slices))
                 ]
                 for f in futures:

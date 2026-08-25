@@ -49,6 +49,7 @@ def main():
     ap.add_argument("--verge", action="store_true", help="检测后把干净节点写入 Clash Verge Rev 扩展")
     ap.add_argument("--out", default="./results", help="结果输出目录")
     ap.add_argument("--sleep", type=float, default=3.0, help="切节点后等待秒数")
+    ap.add_argument("--reply-timeout", type=float, default=120, help="回复等待秒数（页面慢时自动顺延）")
     ap.add_argument("--parallel", type=int, default=1, help="并行实例数（1=串行；2-4 起临时 mihomo 实例并行检测）")
     ap.add_argument("--no-restore", action="store_true", help="测完不恢复 Clash 环境")
     ap.add_argument("--skip-errors", action="store_true", help="ERROR 节点不进结果表（--out json 时仍保留）")
@@ -115,6 +116,7 @@ def main():
 
     results = scan_nodes(api, proxy_port, nodes, parallel=parallel,
                          chrome_path=args.chrome, sleep_sec=sleep_sec,
+                         timeout_reply=args.reply_timeout,
                          on_result=on_result)
 
     # ---------- 恢复环境（仅串行模式动过主实例） ----------
