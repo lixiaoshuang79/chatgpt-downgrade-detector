@@ -24,6 +24,13 @@ DEFAULT_TCP = [("127.0.0.1", 9090), ("127.0.0.1", 7890)]
 GROUP_TYPES = {"Selector", "URLTest", "Fallback", "LoadBalance", "Direct", "Reject"}
 # 保留字（不可切）
 RESERVED = {"DIRECT", "REJECT", "REJECT-DROP", "PASS", "COMPATIBLE", "PASS-RULE", "PASS-REJECT"}
+# 真实可测的代理协议白名单（信息型节点常被 mihomo 误解析成 AnyTLS 等，按名字再兜一层）
+NODE_PROTOCOLS = {
+    "Trojan", "Vmess", "VLESS", "Shadowsocks", "SSR", "Hysteria2",
+    "AnyTLS", "Tuic", "WireGuard", "Snell", "HTTP", "Socks5", "TUIC",
+}
+# 订阅里的信息型节点名特征（流量/到期/客户端提示等）
+INFO_NAME_MARKS = ("剩余", "距离", "套餐", "到期", "客户端", "免流", "提示", "重置", "请自行")
 
 
 class ClashAPI:
@@ -99,8 +106,10 @@ class ClashAPI:
             t = (info or {}).get("type")
             if t in GROUP_TYPES:
                 continue
-            if not t:
-                continue  # 信息型节点（流量/提示）无 type
+            if t not in NODE_PROTOCOLS:
+                continue  # 信息型节点/未知类型
+            if any(mark in name for mark in INFO_NAME_MARKS):
+                continue  # 流量/到期/客户端提示等
             out.append((name, t) if with_type else name)
         return out
 

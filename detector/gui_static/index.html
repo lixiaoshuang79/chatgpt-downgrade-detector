@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatGPT 降智检测器</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg-2: #0d1220;
+    --card: rgba(18, 24, 43, 0.72);
+    --card-border: rgba(255, 255, 255, 0.07);
+    --text: #e6e9f2;
+    --text-dim: #8b93ab;
+    --accent: #7c6cff;
+    --accent-2: #4f9dff;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --gray: #64748b;
+    --radius: 16px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+  .bg-glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(600px 400px at 15% -10%, rgba(124, 108, 255, 0.18), transparent 60%),
+      radial-gradient(700px 500px at 90% 10%, rgba(79, 157, 255, 0.12), transparent 60%),
+      radial-gradient(800px 600px at 50% 110%, rgba(52, 211, 153, 0.07), transparent 60%),
+      linear-gradient(180deg, var(--bg), var(--bg-2));
+  }
+  .app {
+    max-width: 1180px; margin: 0 auto; padding: 22px 28px 40px;
+    display: flex; flex-direction: column; min-height: 100vh; gap: 18px;
+  }
+
+  /* ---------- 顶部 ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 21px; font-weight: 700; letter-spacing: 0.2px;
+  }
+  .logo .mark {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center; font-size: 21px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 6px 24px rgba(124, 108, 255, 0.35);
+  }
+  .logo small {
+    display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); letter-spacing: 1px; margin-top: 2px;
+  }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 13px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--card-border);
+    font-size: 12.5px; color: var(--text-dim);
+    backdrop-filter: blur(8px);
+  }
+  .badge .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gray);
+  }
+  .badge.ok .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .badge.err .dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .badge.busy .dot { background: var(--yellow); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+
+  /* ---------- 主区 ---------- */
+  main {
+    display: grid; grid-template-columns: 360px 1fr; gap: 18px; flex: 1;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(12px);
+    padding: 18px;
+  }
+
+  /* 统计卡 */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    backdrop-filter: blur(12px);
+  }
+  .stat .ico {
+    width: 38px; height: 38px; border-radius: 11px; flex: none;
+    display: grid; place-items: center; font-size: 18px;
+  }
+  .stat .num { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .lbl { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+  .stat.clean .ico { background: rgba(52, 211, 153, 0.14); }
+  .stat.clean .num { color: var(--green); }
+  .stat.mini  .ico { background: rgba(251, 191, 36, 0.14); }
+  .stat.mini  .num { color: var(--yellow); }
+  .stat.wall  .ico { background: rgba(248, 113, 113, 0.14); }
+  .stat.wall  .num { color: var(--red); }
+  .stat.err   .ico { background: rgba(100, 116, 139, 0.16); }
+  .stat.err   .num { color: var(--gray); }
+
+  /* 进度 */
+  .progress-card { margin-top: 14px; }
+  .progress-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .progress-top .cur {
+    font-size: 12.5px; color: var(--text-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;
+  }
+  .progress-top .cur b { color: var(--text); font-weight: 600; }
+  .progress-top .pct { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent-2); }
+  .bar {
+    height: 10px; border-radius: 999px; background: rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    box-shadow: 0 0 14px rgba(124, 108, 255, 0.5);
+    transition: width 0.6s ease;
+  }
+
+  /* 按钮 */
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn {
+    flex: 1; padding: 12px 16px; border: none; border-radius: 12px;
+    font-size: 14.5px; font-weight: 700; cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s;
+    font-family: inherit;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn.primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 8px 24px rgba(124, 108, 255, 0.35);
+  }
+  .btn.primary:not(:disabled):hover { box-shadow: 0 10px 30px rgba(124, 108, 255, 0.5); }
+  .btn.ghost {
+    background: var(--card); border: 1px solid var(--card-border); color: var(--text-dim);
+  }
+  .btn.ghost:not(:disabled):hover { color: var(--text); border-color: rgba(255,255,255,0.18); }
+  .btn.danger { color: var(--red); border-color: rgba(248, 113, 113, 0.35); }
+  .btn.danger:not(:disabled):hover { background: rgba(248, 113, 113, 0.1); }
+  .btn.small { flex: none; padding: 8px 14px; font-size: 12.5px; border-radius: 10px; }
+
+  /* 环境信息 */
+  .env-card { margin-top: 14px; font-size: 12px; color: var(--text-dim); line-height: 1.9; }
+  .env-card .k { color: var(--text-dim); opacity: 0.8; margin-right: 6px; }
+  .env-card .v { color: var(--text); font-family: var(--mono); font-size: 11.5px; }
+
+  /* ---------- 节点列表 ---------- */
+  .node-panel { display: flex; flex-direction: column; min-height: 380px; }
+  .node-head {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+  }
+  .node-head h3 { font-size: 14px; font-weight: 700; }
+  .node-head .filter { display: flex; gap: 6px; }
+  .chip {
+    padding: 4px 11px; border-radius: 999px; font-size: 11.5px; cursor: pointer;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);
+    color: var(--text-dim); transition: all 0.15s;
+  }
+  .chip:hover { color: var(--text); }
+  .chip.active { background: rgba(124, 108, 255, 0.18); color: var(--text); border-color: rgba(124,108,255,0.4); }
+  .node-list {
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 7px;
+    padding-right: 4px; max-height: 520px;
+  }
+  .node-list::-webkit-scrollbar { width: 6px; }
+  .node-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+  .node-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 10px 13px; border-radius: 11px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--card-border);
+    animation: slideIn 0.25s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-5px); } }
+  .node-item .dot {
+    width: 9px; height: 9px; border-radius: 50%; flex: none;
+    background: var(--gray);
+  }
+  .node-item.v-LUNA .dot { background: var(--green); box-shadow: 0 0 8px rgba(52,211,153,0.7); }
+  .node-item.v-MINI .dot { background: var(--yellow); box-shadow: 0 0 8px rgba(251,191,36,0.6); }
+  .node-item.v-LOGIN_WALL .dot { background: var(--red); box-shadow: 0 0 8px rgba(248,113,113,0.6); }
+  .node-item.v-ERROR .dot { background: var(--gray); }
+  .node-item.running .dot { background: var(--accent); animation: pulse 0.8s infinite; }
+  .node-item .name {
+    flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .node-item .name .flag { margin-right: 5px; }
+  .tag {
+    flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px;
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .tag.t-LUNA { color: var(--green); background: rgba(52,211,153,0.12); }
+  .tag.t-MINI { color: var(--yellow); background: rgba(251,191,36,0.12); }
+  .tag.t-LOGIN_WALL { color: var(--red); background: rgba(248,113,113,0.12); }
+  .tag.t-ERROR { color: var(--gray); background: rgba(100,116,139,0.14); }
+  .tag.t-wait { color: var(--text-dim); background: rgba(255,255,255,0.05); }
+  .node-item .reply {
+    flex: none; font-size: 10.5px; color: var(--text-dim); max-width: 170px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 40px 10px; line-height: 2; }
+
+  /* ---------- 规则面板 ---------- */
+  .rules-panel { animation: slideIn 0.3s ease; }
+  .rules-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .rules-head h3 { font-size: 14.5px; font-weight: 700; }
+  .rules-head .btns { display: flex; gap: 8px; }
+  .rules-panel pre {
+    margin-top: 12px; padding: 15px 17px; border-radius: 12px;
+    background: rgba(0, 0, 0, 0.35); border: 1px solid var(--card-border);
+    font-family: var(--mono); font-size: 12px; line-height: 1.75;
+    color: #c9d2e8; overflow-x: auto; white-space: pre;
+  }
+  .hint {
+    margin-top: 10px; font-size: 12px; color: var(--text-dim); line-height: 1.8;
+  }
+  .hint b { color: var(--yellow); font-weight: 600; }
+
+  footer {
+    text-align: center; font-size: 11.5px; color: var(--text-dim); opacity: 0.65; padding-top: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="mark">🛡️</div>
+      <div>
+        ChatGPT 降智检测器
+        <small>DETECT · ROUTE · PROTECT</small>
+      </div>
+    </div>
+    <div class="badges">
+      <span class="badge" id="badgeClash"><i class="dot"></i><span id="badgeClashText">连接中…</span></span>
+      <span class="badge" id="badgeMode"><i class="dot"></i><span>—</span></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- 左栏 -->
+    <section>
+      <div class="stats">
+        <div class="stat clean"><div class="ico">🟢</div><div><div class="num" id="nClean">0</div><div class="lbl">干净 LUNA</div></div></div>
+        <div class="stat mini"><div class="ico">🟡</div><div><div class="num" id="nMini">0</div><div class="lbl">半干净 MINI</div></div></div>
+        <div class="stat wall"><div class="ico">🔴</div><div><div class="num" id="nWall">0</div><div class="lbl">降智 LOGIN_WALL</div></div></div>
+        <div class="stat err"><div class="ico">⚪</div><div><div class="num" id="nErr">0</div><div class="lbl">异常 ERROR</div></div></div>
+      </div>
+
+      <div class="card progress-card">
+        <div class="progress-top">
+          <span class="cur" id="progCur">等待开始</span>
+          <span class="pct" id="progPct">0%</span>
+        </div>
+        <div class="bar"><div class="bar-fill" id="progBar"></div></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" id="btnScan">▶ 开始检测</button>
+        <button class="btn ghost danger" id="btnStop" hidden>■ 停止</button>
+      </div>
+
+      <div class="card env-card" id="envCard">
+        <div><span class="k">控制端</span><span class="v" id="vEndpoint">—</span></div>
+        <div><span class="k">模式</span><span class="v" id="vMode">—</span></div>
+        <div><span class="k">GLOBAL</span><span class="v" id="vGlobal">—</span></div>
+        <div><span class="k">节点总数</span><span class="v" id="vCount">—</span></div>
+      </div>
+    </section>
+
+    <!-- 右栏：节点列表 -->
+    <section class="card node-panel">
+      <div class="node-head">
+        <h3 id="nodeTitle">节点列表</h3>
+        <div class="filter" id="filter">
+          <span class="chip active" data-f="">全部</span>
+          <span class="chip" data-f="LUNA">干净</span>
+          <span class="chip" data-f="MINI">半干净</span>
+          <span class="chip" data-f="LOGIN_WALL">降智</span>
+          <span class="chip" data-f="ERROR">异常</span>
+        </div>
+      </div>
+      <div class="node-list" id="nodeList">
+        <div class="empty">正在连接 Clash 控制端…</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 规则面板 -->
+  <section class="card rules-panel" id="rulesPanel" hidden>
+    <div class="rules-head">
+      <h3>📐 顶级规则（干净节点 → ChatGPT 专属通道）</h3>
+      <div class="btns">
+        <button class="btn ghost small" id="btnCopy">📋 复制</button>
+        <button class="btn ghost small" id="btnVerge">⚙️ 写入 Clash Verge 扩展</button>
+      </div>
+    </div>
+    <pre id="rulesText"></pre>
+    <div class="hint" id="rulesHint"></div>
+  </section>
+
+  <footer>headless 零弹窗检测 · 自动恢复环境 · MIT License</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let NODES = [];          // 全部节点名（顺序）
+let RESULTS = {};        // node -> {verdict, reply}
+let BUSY = false;
+let POLL = null;
+let FILTER = "";
+
+/* ---------- 渲染 ---------- */
+const TAG = {
+  LUNA:       '<span class="tag t-LUNA">LUNA</span>',
+  MINI:       '<span class="tag t-MINI">MINI</span>',
+  LOGIN_WALL: '<span class="tag t-LOGIN_WALL">LOGIN_WALL</span>',
+  ERROR:      '<span class="tag t-ERROR">ERROR</span>',
+  wait:       '<span class="tag t-wait">待测</span>',
+};
+
+function flagOf(name) {
+  const m = name.match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
+  return m ? `<span class="flag">${m[0]}</span>` : '';
+}
+
+function renderList() {
+  const list = $('nodeList');
+  const nodes = FILTER
+    ? NODES.filter(n => RESULTS[n] && RESULTS[n].verdict === FILTER)
+    : NODES;
+  if (!nodes.length) {
+    list.innerHTML = `<div class="empty">${FILTER ? '该分类暂无节点' : '未发现可检测的节点'}<br>请确认 Clash 已连接且订阅里有真实节点</div>`;
+    return;
+  }
+  list.innerHTML = nodes.map(n => {
+    const r = RESULTS[n];
+    const isCur = BUSY && r === undefined && n === CURRENT;
+    const dot = isCur ? 'running' : (r ? 'v-' + r.verdict : '');
+    const tag = isCur ? '<span class="tag t-wait">检测中…</span>' : (r ? TAG[r.verdict] : TAG.wait);
+    const reply = r ? `<span class="reply">${r.reply.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>` : '';
+    return `<div class="node-item ${dot}">
+      <span class="dot"></span>
+      <span class="name">${flagOf(n)}${n}</span>
+      ${tag}${reply}
+    </div>`;
+  }).join('');
+}
+
+let CURRENT = null;
+function updateStats() {
+  let c = 0, m = 0, w = 0, e = 0;
+  Object.values(RESULTS).forEach(r => {
+    if (r.verdict === 'LUNA') c++;
+    else if (r.verdict === 'MINI') m++;
+    else if (r.verdict === 'LOGIN_WALL') w++;
+    else e++;
+  });
+  $('nClean').textContent = c; $('nMini').textContent = m;
+  $('nWall').textContent = w; $('nErr').textContent = e;
+}
+
+function updateProgress(done, total, current) {
+  const pct = total ? Math.round(done / total * 100) : 0;
+  $('progBar').style.width = pct + '%';
+  $('progPct').textContent = pct + '%';
+  $('progCur').innerHTML = current
+    ? `正在检测 <b>${current}</b>` : (done >= total && total > 0 ? '检测完成 ✓' : '等待开始');
+}
+
+/* ---------- API ---------- */
+async function api(path, body) {
+  const opt = body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  };
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+async function refreshStatus() {
+  const s = await api('/api/status');
+  const badge = $('badgeClash'), t = $('badgeClashText');
+  if (s.clash) {
+    badge.className = 'badge ok' + (s.busy ? ' busy' : '');
+    t.textContent = s.busy ? 'Clash 已连接 · 检测中' : 'Clash 已连接';
+    $('badgeMode').querySelector('span').textContent = `模式 ${s.mode}`;
+    $('vEndpoint').textContent = s.endpoint;
+    $('vMode').textContent = s.mode;
+    $('vGlobal').textContent = s.global_now;
+    $('vCount').textContent = s.node_count;
+    if (!NODES.length) {
+      NODES = s.nodes;
+      renderList();
+    }
+    if (s.counts && !BUSY) {
+      // 服务端保留上次检测统计（跨刷新）
+    }
+  } else {
+    badge.className = 'badge err';
+    t.textContent = s.error || 'Clash 未连接';
+    $('nodeList').innerHTML = `<div class="empty">${s.error || '未找到 Clash 控制端'}</div>`;
+  }
+}
+
+async function pollProgress() {
+  const p = await api('/api/progress');
+  if (!BUSY) { BUSY = p.running; }
+  if (p.running) {
+    BUSY = true;
+    CURRENT = p.current;
+    const results = p.results || [];
+    RESULTS = {};
+    results.forEach(r => { RESULTS[r.node] = r; });
+    updateStats();
+    updateProgress(p.done, p.total, p.current);
+    renderList();
+  } else if (p.finished_at) {
+    BUSY = false;
+    CURRENT = null;
+    const results = p.results || [];
+    RESULTS = {};
+    results.forEach(r => { RESULTS[r.node] = r; });
+    updateStats();
+    updateProgress(results.length, p.total || results.length, null);
+    renderList();
+    stopPoll();
+    if (p.error) alert('检测异常: ' + p.error.slice(0, 200));
+    await showRules();
+  }
+}
+
+function startPoll() {
+  stopPoll();
+  POLL = setInterval(pollProgress, 1800);
+}
+function stopPoll() {
+  if (POLL) { clearInterval(POLL); POLL = null; }
+}
+
+/* ---------- 操作 ---------- */
+$('btnScan').onclick = async () => {
+  const r = await api('/api/scan', {});
+  if (r.error) { alert(r.error); return; }
+  BUSY = true;
+  RESULTS = {}; updateStats();
+  updateProgress(0, r.total, null);
+  $('btnScan').hidden = true; $('btnStop').hidden = false;
+  $('badgeClash').classList.add('busy');
+  $('rulesPanel').hidden = true;
+  startPoll();
+};
+
+$('btnStop').onclick = async () => {
+  await api('/api/stop', {});
+  $('btnStop').disabled = true;
+  $('btnStop').textContent = '正在停止…';
+  setTimeout(() => { $('btnStop').disabled = false; $('btnStop').textContent = '■ 停止'; }, 2000);
+};
+
+async function showRules() {
+  const r = await api('/api/rules');
+  $('btnScan').hidden = false; $('btnStop').hidden = true;
+  if (r.clean && r.clean.length) {
+    $('rulesPanel').hidden = false;
+    $('rulesText').textContent = r.rules;
+    $('rulesHint').innerHTML =
+      `检测到 <b style="color:var(--green)">${r.clean.length}</b> 个干净节点。<br>
+       ① 复制规则 → 粘贴到 Clash 配置（proxy-groups 段合并，rules 段置顶）；
+       ② 或用「写入 Clash Verge 扩展」一键写入当前订阅链，再到 Clash Verge 订阅页点<b>「重新激活订阅」</b>生效。`;
+  } else {
+    $('rulesPanel').hidden = false;
+    $('rulesText').textContent = '# 暂未检测出干净节点 — 可尝试换机场 / 换 IP 池后重测';
+    $('rulesHint').textContent = '注意：OpenAI 还会校验浏览器时区指纹，IP 干净但时区不匹配仍可能降智（可用配套浏览器插件修正）。';
+  }
+}
+
+$('btnCopy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($('rulesText').textContent);
+    $('btnCopy').textContent = '✓ 已复制';
+    setTimeout(() => $('btnCopy').textContent = '📋 复制', 1500);
+  } catch (e) { alert('复制失败，请手动选择复制'); }
+};
+
+$('btnVerge').onclick = async () => {
+  $('btnVerge').disabled = true; $('btnVerge').textContent = '写入中…';
+  const r = await api('/api/apply', { verge: true });
+  $('btnVerge').disabled = false; $('btnVerge').textContent = '⚙️ 写入 Clash Verge 扩展';
+  if (r.error) { alert(r.error); return; }
+  if (r.verge) {
+    $('rulesHint').innerHTML =
+      `✅ 已写入扩展：<b style="color:var(--green)">${r.clean.length}</b> 个干净节点<br>
+       groups: <code>${r.verge.groups_extension}</code><br>
+       rules: <code>${r.verge.rules_extension}</code><br>
+       <b>下一步：到 Clash Verge 订阅页点「重新激活订阅」即可生效。</b>`;
+  }
+};
+
+/* 筛选 */
+$('filter').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  document.querySelectorAll('#filter .chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  FILTER = chip.dataset.f;
+  renderList();
+});
+
+/* ---------- 启动 ---------- */
+(async function init() {
+  await refreshStatus();
+  setInterval(refreshStatus, 5000);
+})();
+</script>
+</body>
+</html>

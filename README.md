@@ -20,12 +20,33 @@ OpenAI 会按 IP 对未登录访问做风控分级：
 
 - 🔍 **全节点自动检测**：遍历本地 Clash/mihomo 全部真实节点，未登录三判定（LUNA/MINI/LOGIN_WALL）
 - 🖥️ **headless 零弹窗**：Chrome 无头模式 + CDP 驱动，不弹任何窗口，不打断你的工作
+- 🎨 **Web GUI**：本地网页界面，深色现代风格——统计仪表盘、实时进度、节点状态列表、一键应用规则
 - 📐 **自动生成顶级规则**：干净节点 → `ChatGPT-LUNA` Selector 组 + 4 条 OpenAI 域名规则（规则置顶，优先于订阅自带规则）
-- 🔌 **Clash Verge Rev 深度集成**（`--verge`）：自动把组/规则写入当前订阅链的扩展文件，点一下「重新激活订阅」即生效
+- 🔌 **Clash Verge Rev 深度集成**（`--verge` / GUI 按钮）：自动把组/规则写入当前订阅链的扩展文件，点一下「重新激活订阅」即生效
 - 🌐 **浏览器插件配套**：ChatGPT 指纹核验 + 自动改时区扩展（v3.1.0），解决「IP 干净但时区指纹不匹配」的降智
 - 🛡️ **环境自动恢复**：检测完自动恢复原模式与节点选择
 
 ## 快速开始
+
+### Web GUI（推荐）
+
+```bash
+pip install -r requirements.txt
+python3 detector/gui.py          # 默认 127.0.0.1:8899，自动打开浏览器
+python3 detector/gui.py --port 9000 --no-open   # 自定义端口 / 不自动打开
+```
+
+![GUI 初始状态](docs/screenshots/gui-initial.png)
+
+![GUI 检测中](docs/screenshots/gui-scanning.png)
+
+界面功能：
+- **统计仪表盘**：干净（LUNA）/ 半干净（MINI）/ 降智（LOGIN_WALL）/ 异常（ERROR）实时计数
+- **节点列表**：按状态着色，支持筛选（全部/干净/半干净/降智/异常）
+- **开始检测 / 停止**：一键全节点检测，随时可停（停止后自动恢复 Clash 环境）
+- **规则面板**：检测完成后自动展示顶级规则 → 一键复制 / 一键写入 Clash Verge 扩展
+
+### 命令行
 
 ```bash
 git clone https://github.com/lixiaoshuang79/chatgpt-downgrade-detector.git
@@ -123,6 +144,9 @@ python3 detector/main.py --verge
 chatgpt-downgrade-detector/
 ├── detector/
 │   ├── main.py            # 一键 CLI（检测 + 规则生成 + --verge 写入）
+│   ├── gui.py             # Web GUI 入口（本地服务 + 自动开浏览器）
+│   ├── gui_server.py      # GUI 后端（HTTP API + 后台检测线程）
+│   ├── gui_static/        # 前端界面（单文件，深色现代 UI）
 │   ├── clash_api.py       # Clash/mihomo REST 封装（unix socket + TCP 自适应）
 │   ├── cdp_tester.py      # headless Chrome CDP 三判定（零弹窗）
 │   ├── rules.py           # 规则生成器（片段 / Clash Verge 扩展）
