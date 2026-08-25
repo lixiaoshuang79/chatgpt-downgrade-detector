@@ -505,18 +505,32 @@ function updateProgress(done, total, current) {
 }
 
 /* ---------- API ---------- */
-async function api(path, body) {
+async function api(path, body, timeoutMs = 7000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const opt = body === undefined ? {} : {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
-  const r = await fetch(path, opt);
-  return r.json();
+  opt.signal = ctrl.signal;
+  try {
+    const r = await fetch(path, opt);
+    return await r.json();
+  } catch (e) {
+    return { error: '请求失败: ' + (e.name === 'AbortError' ? '超时' : e.message), _net: true };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function refreshStatus() {
   const s = await api('/api/status');
   const badge = $('badgeClash'), t = $('badgeClashText');
+  if (s._net) {
+    badge.className = 'badge err';
+    t.textContent = 'Clash 未连接';
+    return;
+  }
   if (s.clash) {
     badge.className = 'badge ok' + (s.busy ? ' busy' : '');
     t.textContent = s.busy ? 'Clash 已连接 · 检测中' : 'Clash 已连接';
@@ -653,10 +667,9 @@ $('pluginModal').addEventListener('click', e => { if (e.target === $('pluginModa
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 /* ---------- 启动 ---------- */
-(async function init() {
-  await refreshStatus();
-  setInterval(refreshStatus, 5000);
-})();
+// 先注册轮询再首刷：首次请求失败/挂起不影响后续自动重连
+setInterval(refreshStatus, 4000);
+refreshStatus();
 </script>
 </body>
 </html>
